@@ -9,7 +9,7 @@ git submodule update
 
 # Make sure the "obj" folder exists, otherwise you will get build errors
 # From the Windows Native Tools Command Prompt:
-cl.exe /LD -DDEBUG screenshot.c zlib/*.c cJSON/cJSON.c /Fo.\obj\ /O2 /Ot /G
+cl.exe /LD -DDEBUG screenshot.c zlib/*.c cJSON/cJSON.c /Fo.\obj\ /O2 /Ot /GL
 
 # To test:
 rundll32 D:\path\to\RemoteMonitoring\screenshot.dll,TestModuleCommand
