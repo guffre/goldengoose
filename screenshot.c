@@ -1,5 +1,5 @@
-// cl.exe /LD screenshot.c zlib-1.3.1/*.c cJSON/cJSON.c /Fo.\obj\ /O2 /Ot /GL
-// cl.exe /LD -DDEBUG screenshot.c zlib-1.3.1/*.c cJSON/cJSON.c /Fo.\obj\ /O2 /Ot /GL
+// cl.exe /LD screenshot.c zlib/*.c cJSON/cJSON.c /Fo.\obj\ /O2 /Ot /GL
+// cl.exe /LD -DDEBUG screenshot.c zlib/*.c cJSON/cJSON.c /Fo.\obj\ /O2 /Ot /GL
 
 // Python script for testing
 /*
