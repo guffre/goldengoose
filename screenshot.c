@@ -18,7 +18,7 @@ def bmp():
 
 #include <stdio.h>
 #include "common.h"
-#include "zlib-1.3.1/zlib.h"
+#include "zlib/zlib.h"
 
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "gdi32.lib")
