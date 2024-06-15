@@ -4,14 +4,22 @@ A tool to remotely monitor a Windows machine. The main controller will only prov
 # To build:
 ```
 git clone https://github.com/guffre/RemoteMonitoring.git
+cd RemoteMonitoring
 git submodule init
 git submodule update
 
-# Make sure the "obj" folder exists, otherwise you will get build errors
 # From the Windows Native Tools Command Prompt:
+# If you don't want to use the tinycurl lib that I included, you can build it yourself:
+cd curl
+buildconf.bat
+cd winbuild
+nmake /f Makefile.vc mode=static ENABLE_IPV6=no MACHINE=x64 DEBUG=no WITH_PREFIX=tinycurl
+mv tinycurl ../../
+
+# This will build the screenshot module:
 cl.exe /LD -DDEBUG screenshot.c zlib/*.c cJSON/cJSON.c /Fo.\obj\ /O2 /Ot /GL
 
-# To test:
+# To test the screenshot module:
 rundll32 D:\path\to\RemoteMonitoring\screenshot.dll,TestModuleCommand
 ```
 
