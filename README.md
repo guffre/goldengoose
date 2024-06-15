@@ -16,7 +16,21 @@ cd winbuild
 nmake /f Makefile.vc mode=static ENABLE_IPV6=no MACHINE=x64 DEBUG=no WITH_PREFIX=tinycurl
 mv tinycurl ../../
 
-# This will build the screenshot module:
+# IMPORTANT NOTE!!! There is a bug in tiny-curl when compiling. You will get this error:
+# error C2061: syntax error: identifier 'curl_fd_set'
+# This is apparently a bug with tiny-curl. You need to edit the system.h file
+# This line: typedef fd_set curl_fd_set;
+# Should be: typedef struct fd_set curl_fd_set;
+
+# To build the main executable (dll):
+cl.exe /LD /MD main.c /Fo.\obj\ /O2 /Ot /GL
+
+# To test:
+openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -sha256 -days 3650 -nodes -subj "/C=XX/ST=StateName/L=CityName/O=CompanyName/OU=CompanySectionName/CN=CommonNameOrHostname"
+openssl s_server -cert cert.pem -key key.pem -accept 443
+rundll32 D:\path\to\RemoteMonitoring\main.dll,MainExport
+
+# To build the screenshot module:
 cl.exe /LD -DDEBUG screenshot.c zlib/*.c cJSON/cJSON.c /Fo.\obj\ /O2 /Ot /GL
 
 # To test the screenshot module:

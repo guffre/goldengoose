@@ -1,6 +1,18 @@
+// cl.exe /LD /MD main.c /Fo.\obj\ /O2 /Ot /GL
+
 #include <stdio.h>
 #include <string.h>
-#include "curl/curl.h"
+
+#define CURL_STATICLIB
+#include "tinycurl\include\curl\curl.h"
+
+// Libraries needed for tinycurl
+#pragma comment(lib, "advapi32.lib")
+#pragma comment(lib, "crypt32.lib")
+#pragma comment(lib, "normaliz.lib")
+#pragma comment(lib, "ws2_32.lib")
+#pragma comment(lib, "wldap32.lib")
+#pragma comment(lib, "tinycurl\\lib\\libcurl_a.lib")
 
 int main(void)
 {
@@ -23,7 +35,13 @@ int main(void)
 
         // Check for errors
         if (res != CURLE_OK)
+        {
             fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+        }
+        else
+        {
+            printf("Done sending data!\n");
+        }
 
         // Cleanup
         curl_easy_cleanup(curl);
@@ -32,4 +50,9 @@ int main(void)
     curl_global_cleanup();
 
     return 0;
+}
+
+__declspec(dllexport) void MainExport(void)
+{
+    main();
 }

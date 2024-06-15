@@ -580,7 +580,7 @@ typedef struct fd_set curl_fd_set;
 #endif
 #ifndef curl_fd_set_typedefed
 #define curl_fd_set_typedefed
-typedef fd_set curl_fd_set;
+typedef struct fd_set curl_fd_set;
 #endif
 #ifndef curl_pollfd
 #define curl_pollfd pollfd
