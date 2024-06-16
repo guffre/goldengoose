@@ -1,6 +1,8 @@
 // cl.exe /LD screenshot.c zlib/*.c cJSON/cJSON.c /Fo.\obj\ /O2 /Ot /GL
 // cl.exe /LD -DDEBUG screenshot.c zlib/*.c cJSON/cJSON.c /Fo.\obj\ /O2 /Ot /GL
 
+// Current:
+// cl.exe /LD screenshot.c common.c zlib/*.c cJSON/cJSON.c /Fo.\obj\ /O2 /Ot /GL
 // Python script for testing
 /*
 import zlib
@@ -18,6 +20,7 @@ def bmp():
 
 #include <stdio.h>
 #include "common.h"
+#include "commandlist.h"
 #include "zlib/zlib.h"
 #include "cJSON\cJSON.h"
 
@@ -65,10 +68,10 @@ char* BlobsToJson(DataBlobs* data) {
 unsigned char* CompressData(unsigned char* data, unsigned long dataSize, unsigned long* compressedSize);
 void TakeScreenShot(DataBlobs* dbData);
 
-Command main_cmd;
-
+CommandNode *main_cmd;
+#define DEBUG
 #ifdef DEBUG
-__declspec(dllexport) void MainExport(void)
+__declspec(dllexport) void MainExport(char* args)
 {
     DataBlobs *screenshots = (DataBlobs*)malloc(sizeof(DataBlobs));
     screenshots->buffers = NULL;
@@ -88,16 +91,9 @@ __declspec(dllexport) void MainExport(void)
     fclose(fd);
 }
 
-__declspec(dllexport) void TestModuleCommand(void) {
-    // LinkedList test
-    struct Node* head = NULL;
-    
-    strcpy(main_cmd.command, "screenshot");
-    main_cmd.command_func = MainExport;
-
-    insertAtEnd(&head, main_cmd);
-
-    head->data.command_func();
+__declspec(dllexport) void TestModuleCommand(void)
+{
+    main_cmd = createCommandNode("screenshot", MainExport);    
 }
 #endif
 

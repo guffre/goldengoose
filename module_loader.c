@@ -207,7 +207,7 @@ int loader( void )
 }
 */
 
-ULONG_PTR ReflectiveLoader( LPVOID lpAddr ) {
+ULONG_PTR ReflectiveLoader( LPVOID lpAddr, LPVOID lpParameter ) {
 	// the functions we need
 	LOADLIBRARYA pLoadLibraryA     = NULL;
 	GETPROCADDRESS pGetProcAddress = NULL;
@@ -569,7 +569,7 @@ ULONG_PTR ReflectiveLoader( LPVOID lpAddr ) {
 	// call our respective entry point, fudging our hInstance value
     // printf is here for easier debugging. Just search for ZZZZXXXX and set breakpoint.
     printf("ZZZZXXXX\n");
-	((DLLMAIN)uiValueA)( (HINSTANCE)uiBaseAddress, DLL_PROCESS_ATTACH, NULL );
+	((DLLMAIN)uiValueA)( (HINSTANCE)uiBaseAddress, DLL_PROCESS_ATTACH, lpParameter );
 
 	// STEP 8: return our new entry point address so whatever called us can call DllMain() if needed.
 	return uiValueA;

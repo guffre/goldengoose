@@ -2,16 +2,24 @@
 #include <windows.h>
 #pragma comment(lib, "user32.lib") 
 
+typedef void (*DllFunctionPointer)(char*);
+
 // Function that shows a message box
-__declspec(dllexport) void ShowMessageBox() {
-    MessageBox(NULL, "Hello from DLL!", "DLL Message", MB_ICONINFORMATION);
+__declspec(dllexport) void ShowMessageBox(char* args) {
+    MessageBox(NULL, args, args, MB_ICONINFORMATION);
 }
 
-BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved) {
     MessageBox(NULL, "DLL Loaded!", "DLL Loaded!", MB_ICONINFORMATION);
     switch (fdwReason) {
         case DLL_PROCESS_ATTACH:
             // DLL is being loaded
+            if( lpReserved != NULL )
+            {
+                MessageBox(NULL, "Setting lpReserved!", "d", MB_ICONINFORMATION);
+				// *(HMODULE *)lpReserved = ShowMessageBox;
+                *(DllFunctionPointer*)lpReserved = ShowMessageBox;
+            }
             break;
         case DLL_PROCESS_DETACH:
             // DLL is being unloaded

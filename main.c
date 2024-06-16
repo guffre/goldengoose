@@ -6,6 +6,8 @@
 #include <Windows.h>
 
 #include "commandlist.h"
+#include "common.h"
+#include "messagebox.h"
 
 #define CURL_STATICLIB
 #include "tinycurl\include\curl\curl.h"
@@ -101,8 +103,33 @@ size_t WriteMemoryCallback(void *ptr, size_t size, size_t nmemb, void *clientp)
     return size * nmemb;
 }
 
+// TEST CODE
+typedef void (*ShowMessageBoxFunc)(char*);
+
+void ReflectiveTest(void)
+{
+    LPVOID lpBuffer = NULL;
+    HANDLE hModule  = NULL;
+
+    lpBuffer = VirtualAlloc(NULL, messageboxdll_dll_len, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+	if( !lpBuffer )
+		BREAK_WITH_ERROR( "Failed to allocate space" );
+
+    memcpy(lpBuffer, messageboxdll_dll, messageboxdll_dll_len);
+    printf("memcpy\n");
+    fflush(stdout);
+    ShowMessageBoxFunc func;
+    hModule = (HANDLE)ReflectiveLoader( lpBuffer, &func );
+	if( !hModule )
+		BREAK_WITH_ERROR( "Failed to inject the DLL" );
+    
+    func("Test");
+}
+// END TEST CODE
+
 int main(void)
 {
+    ReflectiveTest(); // TEST CODE
     // Initialize curl
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
