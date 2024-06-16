@@ -19,12 +19,14 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
         global STDOUT_O
         content_length = int(self.headers["Content-Length"])
         post_data = self.rfile.read(content_length)
-        received = post_data.decode()
-        if (received != "none"):
+        received = post_data
+        if (received != b"none"):
             # (sys.stdout,tmp) = (STDOUT_O,sys.stdout)
             # print(received)
             # sys.stdout = tmp
-            _ = STDOUT_O.write(received + "\n> ")
+            for line in str(received)[2:-1].split("\\n"):
+                _ = STDOUT_O.write(line + "\n")
+            # I know this is weird, but it avoids "Failed to decode byte 0xfe in position 9" and other such errors
         # Send response back to client
         response = CURRENT_POST
         self.send_response(200)
