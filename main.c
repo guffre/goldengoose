@@ -1,4 +1,4 @@
-// cl.exe /LD /MD main.c /Fo.\obj\ /O2 /Ot /GL
+// cl.exe /LD /MD main.c moduleloader.c /Fo.\obj\ /O2 /Ot /GL
 
 #include <stdio.h>
 #include <stdlib.h>

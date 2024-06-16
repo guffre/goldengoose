@@ -1,6 +1,5 @@
-
-#include <Windows.h>
-#include "cJSON\cJSON.h"
+#include <stdio.h>
+#include <stdlib.h>
 
 // Base64 dictionary
 static const char* base64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -83,7 +82,7 @@ void printList(struct Node* node) {
 }
 //////////////// LINKED LIST CODE END
 
-//////////////// BLOB/JSON/BASE64 CODE
+//////////////// BLOB/BASE64 CODE
 void FreeBlobs(DataBlobs* data)
 {
     if (data) {
@@ -94,43 +93,6 @@ void FreeBlobs(DataBlobs* data)
         free(data->sizes);
         free(data);
     }
-}
-
-// Convert DataBlobs struct to JSON string
-char* BlobsToJson(DataBlobs* data) {
-    if (!data) {
-        return NULL;
-    }
-
-    cJSON* jsonData = cJSON_CreateObject();
-    cJSON* jsonBuffers = cJSON_CreateArray();
-
-    for (int i = 0; i < data->count; ++i) {
-        cJSON* jsonBuffer = cJSON_CreateObject();
-        cJSON_AddNumberToObject(jsonBuffer, "size", data->sizes[i]);
-        
-        // Encode buffer as a base64 string
-        char* base64Buffer = (char*)malloc(((data->sizes[i] + 2) / 3) * 4 + 1);
-        if (!base64Buffer) {
-            cJSON_Delete(jsonData);
-            return NULL;
-        }
-        int base64Length = Base64Encode(data->buffers[i], data->sizes[i], base64Buffer);
-        base64Buffer[base64Length] = '\0';
-        
-        cJSON_AddStringToObject(jsonBuffer, "data", base64Buffer);
-        free(base64Buffer);
-
-        cJSON_AddItemToArray(jsonBuffers, jsonBuffer);
-    }
-
-    cJSON_AddNumberToObject(jsonData, "count", data->count);
-    cJSON_AddItemToObject(jsonData, "buffers", jsonBuffers);
-
-    char* jsonString = cJSON_Print(jsonData);
-    cJSON_Delete(jsonData);
-
-    return jsonString;
 }
 
 int Base64Encode(const unsigned char* buffer, int length, char* base64Buffer) {
@@ -175,4 +137,14 @@ int Base64Encode(const unsigned char* buffer, int length, char* base64Buffer) {
 
     return base64Length;
 }
-//////////////// BLOB/JSON/BASE64 CODE END
+//////////////// BLOB/BASE64 CODE END
+
+void BREAK_WITH_ERROR(char *err) {
+	printf("\n%s\n", err);
+	exit(3);
+}
+
+#ifdef _WIN32
+#include <Windows.h>
+ULONG_PTR ReflectiveLoader( LPVOID lpAddr );
+#endif

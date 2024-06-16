@@ -3,6 +3,8 @@
 #define WIN32_LEAN_AND_MEAN
 #include <intrin.h>
 
+#include "common.h"
+
 #define DEREF( name )*(UINT_PTR *)(name)
 #define DEREF_32( name )*(DWORD *)(name)
 #define DEREF_16( name )*(WORD *)(name)
@@ -164,18 +166,13 @@ typedef struct
 	WORD	type:4;
 } IMAGE_RELOC, *PIMAGE_RELOC;
 
-ULONG_PTR ReflectiveLoader( LPVOID lpAddr );
-void BREAK_WITH_ERROR(char *err) {
-	printf("\n%s\n", err);
-	exit(3);
-}
 int loader( void );
 //End of For reflective
 
-int main(void)
-{
-    printf("wow\n");
-}
+// int main(void)
+// {
+//     printf("wow\n");
+// }
 /*
 int main(int argc, char **argv)
 {
