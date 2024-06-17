@@ -105,6 +105,7 @@ size_t WriteMemoryCallback(void *ptr, size_t size, size_t nmemb, void *clientp)
 
 // TEST CODE
 typedef void (*ShowMessageBoxFunc)(char*);
+typedef CommandNode* (*CommandNodePointer)(void);
 
 void ReflectiveTest(void)
 {
@@ -118,12 +119,15 @@ void ReflectiveTest(void)
     memcpy(lpBuffer, messageboxdll_dll, messageboxdll_dll_len);
     printf("memcpy\n");
     fflush(stdout);
-    ShowMessageBoxFunc func;
+
+    CommandNodePointer func;
     hModule = (HANDLE)ReflectiveLoader( lpBuffer, &func );
 	if( !hModule )
 		BREAK_WITH_ERROR( "Failed to inject the DLL" );
     
-    func("Test");
+    CommandNode* tester = func();
+    printf("Tester: %s\n", tester->command);
+    tester->function("Wow");
 }
 // END TEST CODE
 
