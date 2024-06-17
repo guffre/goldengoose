@@ -8,7 +8,7 @@
 #define MAX_COMMAND_NAME_LENGTH 256
 
 // Command function typedef
-typedef void (*CommandFunction)(char*);
+typedef char* (*CommandFunction)(char*);
 
 // Node structure for the linked list
 typedef struct CommandNode {
@@ -16,6 +16,8 @@ typedef struct CommandNode {
     CommandFunction function;               // Pointer to command function
     struct CommandNode* next;               // Pointer to next node
 } CommandNode;
+
+typedef CommandNode* (*CommandNodePointer)(void);
 
 CommandNode* createCommandNode(char* commandName, CommandFunction function);
 void insertCommandNode(CommandNode** head, CommandNode* newNode);

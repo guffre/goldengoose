@@ -9,9 +9,11 @@ CommandNode* ModuleCommand;
 
 
 // Function that shows a message box
-__declspec(dllexport) void ShowMessageBox(char* args)
+__declspec(dllexport) char* ShowMessageBox(char* args)
 {
     MessageBox(NULL, args, args, MB_ICONINFORMATION);
+    printf("Test: %s\n", args);
+    return NULL;
 }
 
 __declspec(dllexport) CommandNode* GetModuleCommand(void)

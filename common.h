@@ -13,6 +13,9 @@ typedef struct {
     int count;      // Number of buffers (number of monitors)
 } DataBlobs;
 
+int Base64Encode(const unsigned char* buffer, int length, char* base64Buffer);
+void FreeBlobs(DataBlobs* data);
+
 #ifdef _WIN32
 #include <Windows.h>
 ULONG_PTR ReflectiveLoader( LPVOID lpAddr, LPVOID lpParameter );

