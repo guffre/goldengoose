@@ -5,6 +5,12 @@
 #include <stdlib.h>
 
 #define CHECK_FREE_NULL(x) {if(x) {free(x); x=NULL;};}
+#ifdef DEBUG
+    #define debugf(...) printf("DEBUG: " __VA_ARGS__)
+#else
+    #define debugf(...) do {} while (0)
+#endif
+
 
 // Not sure if this will be common or just for screenshots
 typedef struct {

