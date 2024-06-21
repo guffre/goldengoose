@@ -1,4 +1,6 @@
-// cl.exe /LD messageboxdll.c /Fo.\obj\ /O2 /Ot /GL
+// From directory above this file:
+// cl.exe /I"." /LD gadgets/messageboxdll.c /Fo.\obj\ /O2 /Ot /GL
+
 #include <windows.h>
 #include "commandlist.h"
 #pragma comment(lib, "user32.lib") 

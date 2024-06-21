@@ -1,8 +1,6 @@
-// cl.exe /LD screenshot.c ../zlib/*.c ../cJSON/cJSON.c /Fo.\obj\ /O2 /Ot /GL
-// cl.exe /LD -DDEBUG screenshot.c ../zlib/*.c ../cJSON/cJSON.c /Fo.\obj\ /O2 /Ot /GL
+// From directory above this file:
+// cl.exe /I"." /LD gadgets/screenshot.c common.c base64.c zlib/*.c cJSON/cJSON.c /Fo.\obj\ /O2 /Ot /GL
 
-// Current:
-// cl.exe /LD screenshot.c common.c zlib/*.c cJSON/cJSON.c /Fo.\obj\ /O2 /Ot /GL
 // Python script for testing
 /*
 import zlib
@@ -42,7 +40,7 @@ __declspec(dllexport) CommandNode* GetGadgetCommand(void)
 }
 
 #ifdef DEBUG
-__declspec(dllexport) void MainExport(char* args)
+__declspec(dllexport) void TestGadget(char* args)
 {
     DataBlobs *screenshots = (DataBlobs*)malloc(sizeof(DataBlobs));
     screenshots->buffers = NULL;
