@@ -30,11 +30,11 @@ openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -sha256 -days 3
 openssl s_server -cert cert.pem -key key.pem -accept 443
 rundll32 D:\path\to\RemoteMonitoring\main.dll,MainExport
 
-# To build the screenshot module:
+# To build the screenshot gadget:
 cl.exe /LD -DDEBUG screenshot.c zlib/*.c cJSON/cJSON.c /Fo.\obj\ /O2 /Ot /GL
 
-# To test the screenshot module:
-rundll32 D:\path\to\RemoteMonitoring\screenshot.dll,TestModuleCommand
+# To test the screenshot gadget:
+rundll32 D:\path\to\RemoteMonitoring\screenshot.dll,TestGadget
 ```
 
 # TODOs and Notes
@@ -48,4 +48,3 @@ DataBlobs:
             int count;               // Number of buffers
         } DataBlobs;
     
-    All modules will convert a DataBlob into a json object, and then send that over the comms channel.
