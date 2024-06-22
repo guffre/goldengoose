@@ -25,7 +25,7 @@ void insertCommandNode(CommandNode** head, CommandNode* newNode);
 CommandNode* findCommandNode(CommandNode* head, char* commandName);
 void deleteCommandNode(CommandNode** head, char* commandName);
 void printCommands(CommandNode* head);
-char* getCommands(CommandNode* head, char* prepend);
+char* getCommands(CommandNode* head, const char* prepend);
 
 // Get functionality of command by name and execute it
 void executeCommand(CommandNode* head, char* commandName, char* arguments);
@@ -100,7 +100,7 @@ void printCommands(CommandNode* head)
 }
 
 // Return all commands in the linked list
-char* getCommands(CommandNode* head, char* prepend)
+char* getCommands(CommandNode* head, const char* prepend)
 {
     CommandNode* current = head;
     int buffer_offset = 0;
@@ -160,8 +160,7 @@ void deleteCommandNode(CommandNode** head, char* commandName)
                 *head = current->next; // If the node to delete is the head node
             else
                 prev->next = current->next;
-            free(current);
-            current = NULL;
+            SAFE_FREE(current);
             return; // Node deleted, exit function
         }
         // Move to the next node
