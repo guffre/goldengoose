@@ -1,7 +1,21 @@
-# Description
-A tool to remotely monitor a Windows machine. The main controller will only provide a reverse shell, and additional functionality will be loaded as modules.
+# GOLDENGOOSE
 
-# To build:
+## Overview
+
+This repository contains a Command and Control (C2) framework implemented in C, designed for managing and executing commands on remote systems. The framework utilizes a client-server model where commands are issued by a server and executed on the client system. All communications go over encrypted HTTPS.
+
+## Features
+
+- **Command Execution**: Execute commands on the client
+- **Shell Interaction**: Display message boxes on the client system (Windows-specific).
+- **Dynamic Code Loading**: Load and execute dynamically generated code (gadgets) received from the server.
+- **Installation Logging**: Log installation status by creating a file (`installed.txt`) on the client system.
+- **Continuous Communication**: Maintains continuous communication with the server, updating available commands and sending responses.
+- **Standard Dataflow**: The client initiates requests to the server and awaits responses. This approach diverges from traditional C2 frameworks, which typically have servers initiate requests with clients responding.
+- **Encrypted Communications**: All communications are HTTPS only. Additional channels may be added in the future.
+
+
+## Usage
 
 Set up the repo and submodule dependencies:
 ```
@@ -16,9 +30,9 @@ Then build!
 build.bat
 ```
 
-# Build details
+## Detailed Compilation
 
-## tiny-curl
+### tiny-curl
 I link against tiny-curl. If you want to build your own lib, great! Here's how:
 I include these instructions because tinycurl has a bug which prevents it from compiling (Windows specific?)
 ```
@@ -37,36 +51,26 @@ mv tinycurl ../../
 # Should be: typedef struct fd_set curl_fd_set;
 ```
 
-## To build the main executable (dll):
+### Test and Debug
+```
+# To build the main executable (dll):
 cl.exe -DWIN_X64 /LD /MD main.c gadget_loader.c common.c base64.c /Fo.\obj\ /O2 /Ot /GL
 
-## To build the main executable (exe) with debug statements:
+# To build the main executable (exe) with debug statements:
 cl.exe -DWIN_X64 -DDEBUG /LD /MD main.c gadget_loader.c common.c base64.c /Fo.\obj\ /O2 /Ot /GL
 
-## To test:
+# To test:
 Just use the included `controller\server.py` to communicate to goldengoose
 
-## Alternate test:
+# Alternate test:
 openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -sha256 -days 3650 -nodes -subj "/C=XX/ST=StateName/L=CityName/O=CompanyName/OU=CompanySectionName/CN=CommonNameOrHostname"
 openssl s_server -cert cert.pem -key key.pem -accept 443
 rundll32 D:\path\to\goldengoose\main.dll,MainExport
 
-## To build a test screenshot gadget:
+# To build a test screenshot gadget:
 cl.exe -DDEBUG /I"." /LD gadgets/screenshot.c common.c base64.c zlib/*.c cJSON/cJSON.c /Fo.\obj\ /O2 /Ot /GL
 
-## To test the screenshot gadget:
+# To test the screenshot gadget:
 rundll32 D:\path\to\goldengoose\screenshot.dll,TestGadget
 ### This will create a file `D:\bitmap.json` if successful. If you don't have a D: then edit the code
 ```
-
-# TODOs and Notes
-
-## common.h
-DataBlobs:
-    This is the structure that will be sent over the socket:
-        typedef struct {
-            unsigned char **buffers; // Array of pointers to data buffers
-            unsigned long *sizes;    // Array of sizes of each buffer
-            int count;               // Number of buffers
-        } DataBlobs;
-    
