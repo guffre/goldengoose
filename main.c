@@ -38,9 +38,9 @@ char* CMD_gogo(char* args)
     debugf("gadget: %p", gadget);
     debugf("gadget length: %zu\n", gadget_len);
     lpBuffer = VirtualAlloc(NULL, gadget_len, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-	if( !lpBuffer )
+    if( !lpBuffer )
     {
-		BREAK_WITH_ERROR( "Failed to allocate space" );
+        BREAK_WITH_ERROR( "Failed to allocate space" );
     }
 
     memcpy(lpBuffer, gadget, gadget_len);
@@ -49,9 +49,9 @@ char* CMD_gogo(char* args)
 
     CommandNodePointer func;
     hModule = (HANDLE)ReflectiveLoader( lpBuffer, &func );
-	if( !hModule )
+    if( !hModule )
     {
-		BREAK_WITH_ERROR( "Failed to inject the DLL" );
+        BREAK_WITH_ERROR( "Failed to inject the DLL" );
     }
     
     CommandNode* tester = func();

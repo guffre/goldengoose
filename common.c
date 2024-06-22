@@ -16,6 +16,6 @@ void FreeBlobs(DataBlobs* data)
 
 void BREAK_WITH_ERROR(char *err)
 {
-	debugf("\n%s\n", err);
-	exit(3);
+    debugf("\n%s\n", err);
+    exit(3);
 }

