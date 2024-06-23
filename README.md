@@ -4,16 +4,18 @@
 
 This repository contains a Command and Control (C2) framework implemented in C, designed for managing and executing commands on remote systems. The framework utilizes a client-server model where commands are issued by a server and executed on the client system. All communications go over encrypted HTTPS.
 
+## Unique Features
+
+- **No RWX in Reflective Loader**: The Reflective DLL Loader has been modified to avoid marking memory as Read-Write-Execute (RWX), a common signature often flagged by PSPs.
+- **Normal HTTPS Dataflow**: The client initiates requests to the server and awaits responses. This approach diverges from traditional C2 frameworks, which typically have servers initiate requests with clients responding.
+
 ## Features
 
 - **Command Execution**: Execute commands on the client
 - **Shell Interaction**: Display message boxes on the client system (Windows-specific).
 - **Dynamic Code Loading**: Load and execute dynamically generated code (gadgets) received from the server.
 - **Installation Logging**: Log installation status by creating a file (`installed.txt`) on the client system.
-- **Continuous Communication**: Maintains continuous communication with the server, updating available commands and sending responses.
-- **Standard Dataflow**: The client initiates requests to the server and awaits responses. This approach diverges from traditional C2 frameworks, which typically have servers initiate requests with clients responding.
 - **Encrypted Communications**: All communications are HTTPS only. Additional channels may be added in the future.
-
 
 ## Usage
 
