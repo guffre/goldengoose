@@ -96,7 +96,7 @@ def user_interface():
     global session_queues
     
     while True:
-        display_block  = "\n[ === === === GOGO === === === ]\n"
+        display_block  = "[ === ===  GOLDENGOOSE  === === ]\n"
         if selected_session != '0':
             display_block += "[  bg|background, " + ', '.join(session_commands[selected_session]) + "\n"
             display_block += "[ Queued for target:\n"

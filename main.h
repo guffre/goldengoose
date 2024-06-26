@@ -2,7 +2,8 @@
 #include <string.h>
 #include <Windows.h>
 
-#include "commandlist.h"
+#include "linkedlist.h"
+#include "commandnode.h"
 #include "base64.h"
 
 #define CURL_STATICLIB
@@ -36,7 +37,7 @@ char* CMD_quit(char* args);
 char* CMD_install(char* args);
 
 typedef struct {
-    CommandNode* commandList; // Commands the client knows how to execute (including built-ins)
+    LinkedList* commandList; // Commands the client knows how to execute (including built-ins)
     // The headers that will be sent back to the server, will include key and value
     char* header_command;   // Header key
     char* header_commands;  // Header key for sending commandList, ie "Commands: "

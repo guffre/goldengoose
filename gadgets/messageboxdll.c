@@ -2,7 +2,7 @@
 // cl.exe /I"." /LD gadgets/messageboxdll.c /Fo.\obj\ /O2 /Ot /GL
 
 #include <windows.h>
-#include "commandlist.h"
+#include "commandnode.h"
 #pragma comment(lib, "user32.lib") 
 
 typedef void (*DllFunctionPointer)(char*);

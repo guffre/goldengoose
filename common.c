@@ -1,4 +1,6 @@
 #include "common.h"
+#include "linkedlist.h"
+#include "commandnode.h"
 
 void FreeBlobs(DataBlobs* data)
 {
