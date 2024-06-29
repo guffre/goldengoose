@@ -21,8 +21,8 @@ This repository contains a Command and Control (C2) framework implemented in C, 
 
 Set up the repo and submodule dependencies:
 ```
-git clone https://github.com/guffre/RemoteMonitoring.git
-cd RemoteMonitoring
+git clone https://github.com/guffre/goldengoose.git
+cd goldengoose
 git submodule init
 git submodule update
 ```
