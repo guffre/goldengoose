@@ -2,12 +2,14 @@
 
 ## Overview
 
-This repository contains a Command and Control (C2) framework implemented in C, designed for managing and executing commands on remote systems. The framework utilizes a client-server model where commands are issued by a server and executed on the client system. All communications go over encrypted HTTPS. The server is written in Python, and is known to work on 3.8+
+This repository contains a Command and Control (C2) framework implemented in C, designed for managing and executing commands on remote systems. The framework utilizes a client-server model where commands are issued by a server and executed on the client system. All communications go over encrypted HTTPS. The server is written in Python, and is known to work on 3.8+. Initial callbacks are communicated over legitimate DNS, with C2 running on a different protocol.
 
-## Unique Features
+## Cool Features
 
 - **No RWX in Reflective Loader**: The Reflective DLL Loader has been modified to avoid marking memory as Read-Write-Execute (RWX), a common signature often flagged by PSPs.
 - **Normal HTTPS Dataflow**: The client initiates requests to the server and awaits responses. This approach diverges from traditional C2 frameworks, which typically have servers initiate requests with clients responding.
+- **Initial Callback Handler**: Initial callbacks are handled by a separate executable. This means if the client were to ever crash, you don't lose access.
+- **Initial Callback via DNS**: This is using DNS in a legitimate way, not as a covert channel for comms. You can use the supplied DNS server (in `server.py`) to respond to DNS, or you can setup a legitimate domain and register it. The IPv4 address returned is the actual C2 server, and the TTL is the C2 port.
 
 ## Features
 
@@ -17,7 +19,7 @@ This repository contains a Command and Control (C2) framework implemented in C, 
 - **Installation Logging**: Log installation status by creating a file (`installed.txt`) on the client system.
 - **Encrypted Communications**: All communications are HTTPS only. Additional channels may be added in the future.
 
-## Usage
+## Installation
 
 Set up the repo and submodule dependencies:
 ```
@@ -30,6 +32,29 @@ git submodule update
 Then build!
 ```
 build.bat
+```
+
+Requirements for the server:
+```
+pip install dnslib
+```
+
+## Usage
+
+The server requires a `cert.pem` and `key.pem`. You can use the included self-signed ones, but if you want to create your own the `openssl` command is detailed in the "Test and Debug" section.
+
+The server will catch both initial callbacks (dns request, dns reply)
+as well as provide C2 over clients.
+
+To run:
+```
+py -3 server.py
+```
+
+The client (currently) has no setup. Just run it:
+```
+main.exe
+rundll32 main.dll,MainExport
 ```
 
 ## Detailed Compilation

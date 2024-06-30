@@ -57,7 +57,7 @@ class CustomResolver(BaseResolver):
 
 def dns_server(a_record, cname_record, listen_address="0.0.0.0"):
     resolver = CustomResolver(a_record, cname_record)
-    logger = DNSLogger()
+    logger = DNSLogger(log="truncated,error")
 
     server = DNSServer(resolver, port=53, address=listen_address, logger=logger)
     server.start_thread()
