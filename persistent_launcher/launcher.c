@@ -2,7 +2,7 @@
 #include "launcher.h"
 
 #define MAX_RECORDS 5
-#define DNS_SERVER_IP "9.9.9.9"
+#define DNS_SERVER_IP "127.0.0.1"
 #define DNS_PORT 53
 
 int get_dns_cache(char record_names[][NI_MAXHOST], int *record_count)
@@ -148,6 +148,7 @@ void parse_dns_response(unsigned char *buf, int recv_len)
         {
             buf += 2; // Move past the type (2 bytes)
             buf += 2; // Move past the class (2 bytes)
+            unsigned long ttl = ntohl(*(u_long*)(buf));
             buf += 4; // Move past the TTL (4 bytes)
             buf += 2; // Move past the data length (4 bytes)
 
@@ -155,6 +156,7 @@ void parse_dns_response(unsigned char *buf, int recv_len)
             struct in_addr ipv4;
             memcpy(&ipv4, buf, sizeof(struct in_addr));
             dprintf("IPv4 Address: %s\n", inet_ntoa(ipv4));
+            dprintf("TTL: %lu\n", ttl);
 
             // Move to the next answer
             buf += sizeof(struct in_addr);
