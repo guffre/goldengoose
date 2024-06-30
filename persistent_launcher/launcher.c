@@ -1,51 +1,9 @@
 // cl.exe -DDEBUG launcher.c
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <stdint.h>
-
-#pragma comment(lib, "ws2_32.lib")
+#include "launcher.h"
 
 #define MAX_RECORDS 5
 #define DNS_SERVER_IP "9.9.9.9"
 #define DNS_PORT 53
-
-#ifdef DEBUG
-    #define dprintf(...) printf("DEBUG: " __VA_ARGS__)
-#else
-    #define dprintf(...) do {} while (0)
-#endif
-
-#pragma pack(push, 1)
-struct DNS_HEADER
-{
-    unsigned short id;         // identification number
-    unsigned char rd : 1;      // recursion desired
-    unsigned char tc : 1;      // truncated message
-    unsigned char aa : 1;      // authoritive answer
-    unsigned char opcode : 4;  // purpose of message
-    unsigned char qr : 1;      // query/response flag
-    unsigned char rcode : 4;   // response code
-    unsigned char cd : 1;      // checking disabled
-    unsigned char ad : 1;      // authenticated data
-    unsigned char z : 1;       // its z! reserved
-    unsigned char ra : 1;      // recursion available
-    unsigned short q_count;    // number of question entries
-    unsigned short ans_count;  // number of answer entries
-    unsigned short auth_count; // number of authority entries
-    unsigned short add_count;  // number of resource entries
-};
-
-struct QUESTION
-{
-    unsigned short qtype;
-    unsigned short qclass;
-};
-#pragma pack(pop)
-
-#define JITTER(min, max) ((min) + rand() % ((max) - (min) + 1))
 
 int get_dns_cache(char record_names[][NI_MAXHOST], int *record_count)
 {
@@ -110,10 +68,10 @@ void print_addrinfo(struct addrinfo *res)
 
 void build_dns_query(unsigned char *buf, const char *hostname, int *query_len)
 {
-    struct DNS_HEADER *dns = NULL;
-    struct QUESTION *qinfo = NULL;
+    DNS_HEADER *dns = NULL;
+    QUESTION *qinfo = NULL;
 
-    dns = (struct DNS_HEADER *)buf;
+    dns = (DNS_HEADER *)buf;
     dns->id = (unsigned short)htons(getpid());
     dns->qr = 0;     // This is a query
     dns->opcode = 0; // This is a standard query
@@ -131,7 +89,7 @@ void build_dns_query(unsigned char *buf, const char *hostname, int *query_len)
     dns->add_count = 0;
 
     // point to the query portion
-    buf += sizeof(struct DNS_HEADER);
+    buf += sizeof(DNS_HEADER);
 
     // convert hostname to DNS format
     const char delim[2] = ".";
@@ -152,18 +110,18 @@ void build_dns_query(unsigned char *buf, const char *hostname, int *query_len)
 
     *buf++ = 0;
 
-    qinfo = (struct QUESTION *)buf;
+    qinfo = (QUESTION *)buf;
     qinfo->qtype = htons(1);  // type A query
     qinfo->qclass = htons(1); // class IN
 
-    *query_len = sizeof(struct DNS_HEADER) + (strlen(hostname) + 2) + sizeof(struct QUESTION);
+    *query_len = sizeof(DNS_HEADER) + (strlen(hostname) + 2) + sizeof(QUESTION);
 }
 
 void parse_dns_response(unsigned char *buf, int recv_len)
 {
-    struct DNS_HEADER *dns = (struct DNS_HEADER *)buf;
+    DNS_HEADER *dns = (DNS_HEADER *)buf;
 
-    int offset = sizeof(struct DNS_HEADER);
+    int offset = sizeof(DNS_HEADER);
 
     // Move past the DNS header
     buf += offset;
@@ -171,33 +129,27 @@ void parse_dns_response(unsigned char *buf, int recv_len)
     // Skip over the questions section
     for (int i = 0; i < ntohs(dns->q_count); ++i)
     {
-        while (*buf != 0) {
+        while (*buf != 0)
+        {
             ++buf;
         }
-        ++buf; // Move past the null-terminator of the domain name
+        ++buf;                          // Move past the null-terminator of the domain name
         buf += sizeof(struct QUESTION); // Move past the QTYPE and QCLASS fields
     }
 
-    dprintf("BUF START: %02x %02x %02x\n", *buf, *(buf+1), *(buf+2));
+    dprintf("BUF START: %02x %02x %02x\n", *buf, *(buf + 1), *(buf + 2));
     // Parse answers
     for (int i = 0; i < ntohs(dns->ans_count); ++i)
     {
         buf += 2;
-        dprintf("current buf bytes: %02x %02x %02x\n", *buf, *(buf+1), *(buf+2));
+        dprintf("current buf bytes: %02x %02x %02x\n", *buf, *(buf + 1), *(buf + 2));
         // Check if it's an IPv4 address (type A record)
-        if (*(buf+1) == 0x01)
+        if (*(buf + 1) == 0x01)
         {
-            // Move past the type (2 bytes)
-            buf += 2;
-
-            // Move past the class (2 bytes)
-            buf += 2;
-
-            // Move past the TTL (4 bytes)
-            buf += 4;
-            
-            // Move past the data length (4 bytes)
-            buf += 2;
+            buf += 2; // Move past the type (2 bytes)
+            buf += 2; // Move past the class (2 bytes)
+            buf += 4; // Move past the TTL (4 bytes)
+            buf += 2; // Move past the data length (4 bytes)
 
             // Extract the IPv4 address (4 bytes)
             struct in_addr ipv4;
@@ -207,23 +159,15 @@ void parse_dns_response(unsigned char *buf, int recv_len)
             // Move to the next answer
             buf += sizeof(struct in_addr);
         }
-        else if (*(buf+1) == 0x05)
+        else if (*(buf + 1) == 0x05)
         {
-            // It's a CNAME record (canonical name)
-            buf += 2; // Move past the type
-            buf += 2; // Move past the class
-            buf += 4; // Move past the TTL
+            // It's a CNAME record
+            buf += 2;                // Move past the type
+            buf += 2;                // Move past the class
+            buf += 4;                // Move past the TTL
             int length = *(buf + 1); // Length of the CNAME
-            buf += length+2; // Move past the CNAME + length
+            buf += length + 2;       // Move past the CNAME + length
         }
-        else
-        {
-            // Skip this answer (move past the length field and data)
-            buf += 1; // Length field (1 byte)
-            buf += ntohs(*(uint16_t *)buf); // Data length (2 bytes)
-            buf += sizeof(struct in_addr); // IPv4 address length (4 bytes)
-        }
-
     }
 }
 
@@ -273,9 +217,9 @@ void perform_dns_request(const char *hostname)
         dprintf("%p] ", buf);
         for (int i = 0; i < recv_len; ++i)
         {
-            printf("%02X ", buf[i]);
+            dprintf("%02X ", buf[i]);
             if ((i + 1) % 16 == 0) // New line every 16 bytes
-                printf("\n%p] ", &(buf[i]));
+                dprintf("\n%p] ", &(buf[i]));
         }
         dprintf("\n");
         // Add length of hostname + 2 to skip past [some byte][hostname][null terminator]
@@ -289,7 +233,7 @@ int main(int argc, char **argv)
 {
     WSADATA wsaData;
     char record_names[MAX_RECORDS][NI_MAXHOST];
-    int record_count = 0;
+    int record_count   = 0;
     int current_record = 0;
 
     // Get DNS cache and extract record names
