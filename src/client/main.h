@@ -7,7 +7,7 @@
 #include "base64.h"
 
 #define CURL_STATICLIB
-#include "tinycurl\include\curl\curl.h"
+#include "..\..\tinycurl\include\curl\curl.h"
 
 // Library for MessageBox
 #pragma comment(lib, "user32.lib")
@@ -18,7 +18,7 @@
 #pragma comment(lib, "normaliz.lib")
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "wldap32.lib")
-#pragma comment(lib, "tinycurl\\lib\\libcurl_a.lib")
+#pragma comment(lib, "..\\..\\tinycurl\\lib\\libcurl_a.lib")
 
 // Function declarations
 int   main(void);

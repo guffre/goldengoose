@@ -20,8 +20,8 @@ def bmp():
 #include "base64.h"
 #include "common.h"
 #include "commandnode.h"
-#include "zlib/zlib.h"
-#include "cJSON/cJSON.h"
+#include "..\..\..\zlib\zlib.h"
+#include "..\..\..\cJSON\cJSON.h"
 
 #include <Windows.h>
 #pragma comment(lib, "user32.lib")

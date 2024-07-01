@@ -1,3 +1,4 @@
+// cl.exe -DDEBUG -DWIN_X64 loader.c
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <stdio.h>

