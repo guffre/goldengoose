@@ -32,7 +32,7 @@ int inject( DWORD dwProcessId, LPVOID lpBuffer, DWORD dwLength );
 //===============================================================================================//
 
 #ifdef DEBUG
-    #define dprintf(...) printf("DEBUG: " __VA_ARGS__)
+    #define dprintf(...) printf(__VA_ARGS__)
 #else
     #define dprintf(...) do {} while (0)
 #endif
