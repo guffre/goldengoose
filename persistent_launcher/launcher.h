@@ -43,10 +43,15 @@ typedef struct QUESTION {
 } QUESTION;
 #pragma pack(pop)
 
+typedef struct C2CHANNEL {
+    char* c2_server_ip;
+    unsigned long c2_server_port;
+} C2CHANNEL;
+
 int get_dns_cache(char record_names[][NI_MAXHOST], int *record_count);
 void print_addrinfo(struct addrinfo *res);
 void build_dns_query(unsigned char *buf, const char *hostname, int *query_len);
-void parse_dns_response(unsigned char *buf, int recv_len);
+int parse_dns_response(unsigned char *buf, int recv_len);
 void perform_dns_request(const char *hostname);
 
 #endif

