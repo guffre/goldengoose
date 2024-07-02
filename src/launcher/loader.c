@@ -36,6 +36,8 @@ int inject( DWORD dwProcessId, LPVOID lpBuffer, DWORD dwLength )
         if( !hProcess )
             BREAK_WITH_ERROR( "Failed to open the target process: " );
 
+        // In original code, last argument was NULL
+        // We will pass through loaded memory address to avoid the caller() trick
         hModule = LoadRemoteLibraryR( hProcess, lpBuffer, dwLength, NULL );
         if( !hModule )
             BREAK_WITH_ERROR( "Failed to inject the DLL" );
@@ -98,7 +100,8 @@ HANDLE WINAPI LoadRemoteLibraryR( HANDLE hProcess, LPVOID lpBuffer, DWORD dwLeng
             lpReflectiveLoader = (LPTHREAD_START_ROUTINE)( (ULONG_PTR)lpRemoteLibraryBuffer + dwReflectiveLoaderOffset );
 
             // create a remote thread in the host process to call the ReflectiveLoader!
-            hThread = CreateRemoteThread( hProcess, NULL, 1024*1024, lpReflectiveLoader, lpParameter, 0, &dwThreadId );
+            //This was lpParameter instead of lpRemoteLibraryBuffer
+            hThread = CreateRemoteThread( hProcess, NULL, 1024*1024, lpReflectiveLoader, lpRemoteLibraryBuffer, 0, &dwThreadId );
 
         } while( 0 );
 
@@ -173,9 +176,9 @@ DWORD GetReflectiveLoaderOffset( VOID * lpReflectiveDllBuffer )
         char * cpExportedFunctionName = (char *)(uiBaseAddress + Rva2Offset( DEREF_32( uiNameArray ), uiBaseAddress ));
 
         // TODO: Make a DLL that properly loads itself
-        if( strstr( cpExportedFunctionName, "ShowMessageBox" ) != NULL )
+        if( strstr( cpExportedFunctionName, "ReflectiveLoader" ) != NULL )
         {
-            dprintf("Found ShowMessageBox.\n");
+            dprintf("Found ReflectiveLoader.\n");
             // get the File Offset for the array of addresses
             uiAddressArray = uiBaseAddress + Rva2Offset( ((PIMAGE_EXPORT_DIRECTORY )uiExportDir)->AddressOfFunctions, uiBaseAddress );    
     
@@ -217,13 +220,13 @@ DWORD Rva2Offset( DWORD dwRva, UINT_PTR uiBaseAddress )
     return 0;
 }
 
-#include "messagebox.h"
+#include "messagebox_r.h"
 
 int main(int argc, char** argv)
 {
     // TODO: Do I even need to alloc this?
-    //LPVOID dll = malloc(mb_dll_len);
-    //memcpy(dll, mb_dll, mb_dll_len);
+    //LPVOID dll = malloc(messagebox_r_dll_len);
+    //memcpy(dll, messagebox_r_dll, messagebox_r_dll_len);
     DWORD pid = atoi(argv[1]);
-    inject(pid, mb_dll, mb_dll_len);
+    inject(pid, messagebox_r_dll, messagebox_r_dll_len);
 }
