@@ -2,7 +2,9 @@
 
 ## Overview
 
-This repository contains a Command and Control (C2) framework implemented in C, designed for managing and executing commands on remote systems. The framework utilizes a client-server model where commands are issued by a server and executed on the client system. All communications go over encrypted HTTPS. The server is written in Python, and is known to work on 3.8+. Initial callbacks are communicated over legitimate DNS, with C2 running on a different protocol.
+This repository contains a Command and Control (C2) framework implemented in C, designed for managing and executing commands on remote systems. The framework utilizes a client-server model where commands are issued by a server and executed on the client system. All communications go over encrypted HTTPS. The server is written in Python, and is known to work on 3.8+. Initial callbacks are communicated over legitimate DNS, with the Stager and C2 running on a different protocol (HTTPS). These can all be the same server, or different servers.
+
+![image](https://github.com/guffre/goldengoose/assets/21281361/e04b6229-e60d-4753-a882-90b8fcb3d131)
 
 ## Cool Features
 
