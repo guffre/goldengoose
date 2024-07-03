@@ -220,13 +220,13 @@ DWORD Rva2Offset( DWORD dwRva, UINT_PTR uiBaseAddress )
     return 0;
 }
 
-#include "messagebox_r.h"
+// #include "messagebox_r.h"
 
-int main(int argc, char** argv)
-{
-    // TODO: Do I even need to alloc this?
-    //LPVOID dll = malloc(messagebox_r_dll_len);
-    //memcpy(dll, messagebox_r_dll, messagebox_r_dll_len);
-    DWORD pid = atoi(argv[1]);
-    inject(pid, messagebox_r_dll, messagebox_r_dll_len);
-}
+// int main(int argc, char** argv)
+// {
+//     // TODO: Do I even need to alloc this?
+//     //LPVOID dll = malloc(messagebox_r_dll_len);
+//     //memcpy(dll, messagebox_r_dll, messagebox_r_dll_len);
+//     DWORD pid = atoi(argv[1]);
+//     inject(pid, messagebox_r_dll, messagebox_r_dll_len);
+// }

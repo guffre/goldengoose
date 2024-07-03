@@ -1,5 +1,4 @@
-// From directory above this file:
-// cl.exe /I"." /LD gadgets/messageboxdll.c /Fo.\obj\ /O2 /Ot /GL
+// cl.exe /LD messagebox_r.c /Fo.\obj\ /O2 /Ot /GL
 #include <stdio.h>
 #include <Windows.h>
 #define WIN32_LEAN_AND_MEAN
