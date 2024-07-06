@@ -19,37 +19,36 @@ int inject( DWORD dwProcessId, LPVOID lpBuffer, DWORD dwLength )
 
     dprintf("Targeting PID: %d\n", dwProcessId);
 
-    do
+    if( OpenProcessToken( GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &hToken ) )
     {
-        if( OpenProcessToken( GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &hToken ) )
-        {
-            priv.PrivilegeCount           = 1;
-            priv.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
-        
-            if( LookupPrivilegeValue( NULL, SE_DEBUG_NAME, &priv.Privileges[0].Luid ) )
-                AdjustTokenPrivileges( hToken, FALSE, &priv, 0, NULL, NULL );
+        priv.PrivilegeCount           = 1;
+        priv.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+    
+        if( LookupPrivilegeValue( NULL, SE_DEBUG_NAME, &priv.Privileges[0].Luid ) )
+            AdjustTokenPrivileges( hToken, FALSE, &priv, 0, NULL, NULL );
 
-            CloseHandle( hToken );
-        }
+        CloseHandle( hToken );
+    }
 
-        hProcess = OpenProcess( PROCESS_CREATE_THREAD | PROCESS_QUERY_INFORMATION | PROCESS_VM_OPERATION | PROCESS_VM_WRITE | PROCESS_VM_READ, FALSE, dwProcessId );
-        if( !hProcess )
-            BREAK_WITH_ERROR( "Failed to open the target process: " );
+    hProcess = OpenProcess( PROCESS_CREATE_THREAD | PROCESS_QUERY_INFORMATION | PROCESS_VM_OPERATION | PROCESS_VM_WRITE | PROCESS_VM_READ, FALSE, dwProcessId );
+    if( !hProcess )
+    {
+        dprintf( "Failed to open the target process: " );
+        return 1;
+    }
 
-        // In original code, last argument was NULL
-        // We will pass through loaded memory address to avoid the caller() trick
-        hModule = LoadRemoteLibraryR( hProcess, lpBuffer, dwLength, NULL );
-        if( !hModule )
-            BREAK_WITH_ERROR( "Failed to inject the DLL" );
+    // In original code, last argument was NULL
+    // We will pass through loaded memory address to avoid the caller() trick
+    hModule = LoadRemoteLibraryR( hProcess, lpBuffer, dwLength, NULL );
+    CloseHandle( hProcess );
+    if( !hModule )
+    {
+        dprintf( "Failed to inject the DLL" );
+        return 1;
+    }
 
-        dprintf( "[+] Injected into process %d.", dwProcessId );
-        
-        WaitForSingleObject( hModule, -1 );
-
-    } while( 0 );
-
-    if( hProcess )
-        CloseHandle( hProcess );
+    dprintf( "[+] Injected into process %d.", dwProcessId );
+    WaitForSingleObject( hModule, -1 );
 
     return 0;
 }
@@ -176,9 +175,9 @@ DWORD GetReflectiveLoaderOffset( VOID * lpReflectiveDllBuffer )
         char * cpExportedFunctionName = (char *)(uiBaseAddress + Rva2Offset( DEREF_32( uiNameArray ), uiBaseAddress ));
 
         // TODO: Make a DLL that properly loads itself
-        if( strstr( cpExportedFunctionName, "ReflectiveLoader" ) != NULL )
+        if( strstr( cpExportedFunctionName, "SelfReflectiveLoader" ) != NULL )
         {
-            dprintf("Found ReflectiveLoader.\n");
+            dprintf("Found SelfReflectiveLoader.\n");
             // get the File Offset for the array of addresses
             uiAddressArray = uiBaseAddress + Rva2Offset( ((PIMAGE_EXPORT_DIRECTORY )uiExportDir)->AddressOfFunctions, uiBaseAddress );    
     

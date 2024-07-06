@@ -24,6 +24,13 @@
 #pragma comment(lib, "dnsapi.lib")
 // #pragma comment(lib, "ntdll.lib")
 
+#define SERVER_STRING_LENGTH 256
+
+struct MemoryStruct {
+    char *memory;
+    size_t size;
+};
+
 // For enumerating through DNS cache
 typedef struct _DNS_CACHE_ENTRY {
     struct _DNS_CACHE_ENTRY* pNext; // Pointer to next entry
