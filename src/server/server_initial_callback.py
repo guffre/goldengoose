@@ -21,6 +21,7 @@ class CustomResolver(BaseResolver):
     
         if qtype == QTYPE.A:
             reply.add_answer(RR(qname, QTYPE.A, rdata=A(self.a_record), ttl=C2_LISTEN_PORT))
+            reply.add_answer(RR(qname, QTYPE.CNAME, rdata=CNAME(self.cname_record), ttl=60))
         elif qtype == QTYPE.CNAME:
             reply.add_answer(RR(qname, QTYPE.CNAME, rdata=CNAME(self.cname_record), ttl=60))
     
@@ -35,7 +36,7 @@ def dns_server(a_record, cname_record, listen_address="0.0.0.0"):
 
 if __name__ == '__main__':
     print("[+] Starting GOLDENGOOSE Initial Callback Server")
-    dns_server(C2_LISTEN_ADDR, "")
+    dns_server(C2_LISTEN_ADDR, "WOWZERZ")
     print("[+] DNS Server listening on:")
     print("[+]      IPv4: 0.0.0.0")
     print("[+]      Port: UDP 53")

