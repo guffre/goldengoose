@@ -1,3 +1,7 @@
+#ifndef H_MAIN
+#define H_MAIN
+
+#define WIN32_LEAN_AND_MEAN
 #include "common.h"
 #include <string.h>
 #include <Windows.h>
@@ -54,3 +58,5 @@ typedef struct {
     // Actual curl header struct
     struct curl_slist* client_headers;  
 } CommandStruct;
+
+#endif
