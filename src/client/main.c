@@ -368,7 +368,7 @@ char *execute_command(const char *cmd)
 
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved)
 {
-    MessageBox(NULL, "DLL Loaded! DLL Main Called", "DLL Loaded!", MB_ICONINFORMATION);
+    // MessageBox(NULL, "DLL Loaded! DLL Main Called", "DLL Loaded!", MB_ICONINFORMATION);
     switch (fdwReason)
     {
         case DLL_PROCESS_ATTACH:

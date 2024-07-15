@@ -12,5 +12,8 @@ cl.exe -DWIN_X64 -DDEBUG /MD main.c gadget_loader.c common.c base64.c commandnod
 :: Non-debug build of the client as .dll
 cl.exe -DWIN_X64 /LD /MD main.c gadget_loader.c common.c base64.c commandnode.c linkedlist.c /Fo..\..\obj\ /O2 /Ot /GL
 
+:: Copy main.dll into the server folder. TODO: WOWZERZ should be dynamic
+copy main.dll ..\server\WOWZERZ
+
 :: Cleanup some junk files
 del *.exp *.lib

@@ -80,8 +80,9 @@ HANDLE WINAPI LoadRemoteLibraryR( HANDLE hProcess, LPVOID lpBuffer, DWORD dwLeng
                 break;
             }
 
-            // alloc memory (RWX) in the host process for the image...
-            lpRemoteLibraryBuffer = VirtualAllocEx( hProcess, NULL, dwLength, MEM_RESERVE|MEM_COMMIT, PAGE_EXECUTE_READWRITE ); 
+            // alloc memory (RX) in the host process for the image...
+            // TODO: Free this? Not necessary but would be nice.
+            lpRemoteLibraryBuffer = VirtualAllocEx( hProcess, NULL, dwLength, MEM_RESERVE|MEM_COMMIT, PAGE_EXECUTE_READ ); 
             if( !lpRemoteLibraryBuffer )
             {
                 dprintf("Error calling VirtualAlloc.\n");

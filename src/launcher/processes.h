@@ -17,10 +17,11 @@
 #endif
 
 DWORD GetInjectProcess(void);
+BOOL GetProcessModule(DWORD processID, char* moduleName);
 void ListProcessModules(DWORD processID);
 void ListProcessThreads(DWORD processID);
 void ListProcessPrivileges(HANDLE hProcess);
-void GetProcessUserToken(HANDLE hProcess);
+LPWSTR GetProcessUserToken(HANDLE hProcess);
 BOOL SetPriv(HANDLE token, char *privilege);
 
 
