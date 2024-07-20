@@ -48,8 +48,7 @@ int inject( DWORD dwProcessId, LPVOID lpBuffer, DWORD dwLength )
     }
 
     dprintf( "[+] Injected into process %d.", dwProcessId );
-    WaitForSingleObject( hModule, -1 );
-
+    // WaitForSingleObject( hModule, -1 );
     return 0;
 }
 
@@ -101,7 +100,22 @@ HANDLE WINAPI LoadRemoteLibraryR( HANDLE hProcess, LPVOID lpBuffer, DWORD dwLeng
 
             // create a remote thread in the host process to call the ReflectiveLoader!
             //This was lpParameter instead of lpRemoteLibraryBuffer
+            /*
+            HANDLE CreateRemoteThread(
+                    [in]  HANDLE                 hProcess,
+                    [in]  LPSECURITY_ATTRIBUTES  lpThreadAttributes,
+                    [in]  SIZE_T                 dwStackSize,
+                    [in]  LPTHREAD_START_ROUTINE lpStartAddress,
+                    [in]  LPVOID                 lpParameter,
+                    [in]  DWORD                  dwCreationFlags,
+                    [out] LPDWORD                lpThreadId
+            */
             hThread = CreateRemoteThread( hProcess, NULL, 1024*1024, lpReflectiveLoader, lpRemoteLibraryBuffer, 0, &dwThreadId );
+
+            // Attempt at free'ing memory. The reflectiveloader will re-allocate and run from its own space
+            // There's definitely a better way to do this than just waiting 5 seconds...
+            Sleep(5000);
+            VirtualFreeEx(hProcess, lpRemoteLibraryBuffer, dwLength, MEM_FREE);
 
         } while( 0 );
 

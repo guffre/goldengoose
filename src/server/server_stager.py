@@ -4,8 +4,8 @@ import ssl
 from http.server import *
 import http.server
 
-SHARED_DIRECTORY = '.'
-STAGER_LISTENER_PORT = 443
+STAGER_PAYLOAD_DIRECTORY = '.'
+STAGER_LISTENER_PORT     = 8443
 
 handler_class = SimpleHTTPRequestHandler
 
@@ -23,7 +23,7 @@ class DualStackServer(ThreadingHTTPServer):
         return ret
     
     def finish_request(self, request, client_address):
-        self.RequestHandlerClass(request, client_address, self, directory=SHARED_DIRECTORY)
+        self.RequestHandlerClass(request, client_address, self, directory=STAGER_PAYLOAD_DIRECTORY)
 
 if __name__ == '__main__':
     http.server.test(

