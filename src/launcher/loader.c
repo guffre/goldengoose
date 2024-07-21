@@ -6,6 +6,7 @@
 #include "loader.h"
 
 #pragma comment(lib,"Advapi32.lib")
+#pragma comment(lib,"onecore.lib")
 
 // Simple app to inject a reflective DLL into a process vis its process ID.
         // Usage: inject.exe [pid] [dll_file]
@@ -37,9 +38,53 @@ int inject( DWORD dwProcessId, LPVOID lpBuffer, DWORD dwLength )
         return 1;
     }
 
+    HANDLE hFileMapping = CreateFileMappingA(
+        INVALID_HANDLE_VALUE,
+        NULL,
+        PAGE_READWRITE,
+        0,
+        256,
+        NULL
+    );
+    if (hFileMapping == NULL)
+    {
+        dprintf("Error creating file mapping: %d\n", GetLastError());
+    }
+
+    dprintf("File mapping creation: %p\n", hFileMapping);
+
+    LPVOID pBuf = MapViewOfFile(
+        hFileMapping,   // handle to map object
+        FILE_MAP_ALL_ACCESS,
+        0,
+        0,
+        256);
+    if (pBuf == NULL)
+    {
+        dprintf("Error mapping in original process: %d\n", GetLastError());
+    }
+    
+    dprintf("Mapping in original process: %p\n", pBuf);
+
+    PVOID injectBuffer = MapViewOfFile2(
+      hFileMapping,
+      hProcess,
+      0,
+      NULL,
+      256,
+      0,
+      PAGE_READWRITE
+    );
+    if (injectBuffer == NULL)
+    {
+        dprintf("Error mapping in inject process: %d\n", GetLastError());
+    }
+
+    dprintf("Mapping in inject process: %p\n", injectBuffer);
+
     // In original code, last argument was NULL
     // We will pass through loaded memory address to avoid the caller() trick
-    hModule = LoadRemoteLibraryR( hProcess, lpBuffer, dwLength, NULL );
+    hModule = LoadRemoteLibraryR( hProcess, lpBuffer, dwLength, injectBuffer );
     CloseHandle( hProcess );
     if( !hModule )
     {
@@ -52,7 +97,7 @@ int inject( DWORD dwProcessId, LPVOID lpBuffer, DWORD dwLength )
     return 0;
 }
 
-HANDLE WINAPI LoadRemoteLibraryR( HANDLE hProcess, LPVOID lpBuffer, DWORD dwLength, LPVOID lpParameter )
+HANDLE WINAPI LoadRemoteLibraryR( HANDLE hProcess, LPVOID lpBuffer, DWORD dwLength, PVOID injectBuffer )
 {
     BOOL bSuccess                             = FALSE;
     LPVOID lpRemoteLibraryBuffer              = NULL;
@@ -79,24 +124,49 @@ HANDLE WINAPI LoadRemoteLibraryR( HANDLE hProcess, LPVOID lpBuffer, DWORD dwLeng
                 break;
             }
 
+            struct Layout {
+                LPVOID lpAddr;
+                PVOID mutexBuffer;
+                LPVOID originalAlloc;
+                DWORD originalAllocLen;
+            };
+
+            dprintf("sizeof struct layout: %zu\n", sizeof(struct Layout));
             // alloc memory (RX) in the host process for the image...
             // TODO: Free this? Not necessary but would be nice.
-            lpRemoteLibraryBuffer = VirtualAllocEx( hProcess, NULL, dwLength, MEM_RESERVE|MEM_COMMIT, PAGE_EXECUTE_READ ); 
+            lpRemoteLibraryBuffer = VirtualAllocEx( hProcess, NULL, sizeof(struct Layout) + dwLength, MEM_RESERVE|MEM_COMMIT, PAGE_EXECUTE_READ ); 
             if( !lpRemoteLibraryBuffer )
             {
                 dprintf("Error calling VirtualAlloc.\n");
                 break;
             }
 
-            // write the image into the host process...
-            if( !WriteProcessMemory( hProcess, lpRemoteLibraryBuffer, lpBuffer, dwLength, NULL ) )
+            struct Layout layout;
+            layout.lpAddr = lpRemoteLibraryBuffer;
+            layout.mutexBuffer = injectBuffer;
+            layout.originalAlloc = lpBuffer;
+            layout.originalAllocLen = dwLength;
+
+            dprintf("Write #1 at address: %p\n", lpRemoteLibraryBuffer);
+            if( !WriteProcessMemory( hProcess, lpRemoteLibraryBuffer, &layout, sizeof(struct Layout), NULL ) )
             {
-                dprintf("Error writing process memory.\n");
+                dprintf("Error writing process memory #1.\n");
+                break;
+            }
+
+            // Cast to char* so that pointer arithmetic adds single bytes
+            LPVOID offset = ((char*)lpRemoteLibraryBuffer) + sizeof(struct Layout);
+
+            dprintf("Write #2 at address: %p\n", offset);
+            // write the image into the host process...
+            if( !WriteProcessMemory( hProcess, offset, lpBuffer, dwLength, NULL ) )
+            {
+                dprintf("Error writing process memory #2.\n");
                 break;
             }
             
             // add the offset to ReflectiveLoader() to the remote library address...
-            lpReflectiveLoader = (LPTHREAD_START_ROUTINE)( (ULONG_PTR)lpRemoteLibraryBuffer + dwReflectiveLoaderOffset );
+            lpReflectiveLoader = (LPTHREAD_START_ROUTINE)( (ULONG_PTR)offset + dwReflectiveLoaderOffset );
 
             // create a remote thread in the host process to call the ReflectiveLoader!
             //This was lpParameter instead of lpRemoteLibraryBuffer
@@ -110,12 +180,9 @@ HANDLE WINAPI LoadRemoteLibraryR( HANDLE hProcess, LPVOID lpBuffer, DWORD dwLeng
                     [in]  DWORD                  dwCreationFlags,
                     [out] LPDWORD                lpThreadId
             */
-            hThread = CreateRemoteThread( hProcess, NULL, 1024*1024, lpReflectiveLoader, lpRemoteLibraryBuffer, 0, &dwThreadId );
 
-            // Attempt at free'ing memory. The reflectiveloader will re-allocate and run from its own space
-            // There's definitely a better way to do this than just waiting 5 seconds...
-            Sleep(5000);
-            VirtualFreeEx(hProcess, lpRemoteLibraryBuffer, dwLength, MEM_FREE);
+
+            hThread = CreateRemoteThread( hProcess, NULL, 1024*1024, lpReflectiveLoader, offset, 0, &dwThreadId );
 
         } while( 0 );
 
